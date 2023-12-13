@@ -18,7 +18,7 @@ ghg_data %>%
   theme_light()
   #theme(legend.position = "none")
 
-ghg_data <- ghg_data %>%
+ghg_data_long <- ghg_data %>%
   group_by(series_code, country_or_area) %>% 
   arrange(country_or_area, wt = year,
           .by_group = T) %>%
@@ -36,3 +36,9 @@ ghg_data <- ghg_data %>%
   ungroup() %>% 
   mutate_if(is.character, factor)
 
+
+ghg_data_wide <- ghg_data_long %>% 
+  select(gas, region, year, value) %>% 
+  pivot_wider(names_from = year,
+              values_from = c(value),
+              values_fn = mean)
