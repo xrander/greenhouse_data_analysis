@@ -1,5 +1,4 @@
 library("tidyverse")
-library("vip")
 library("janitor")
 
 files <- list.files(pattern = "\\.csv$", full.names = T)
@@ -10,20 +9,6 @@ ghg_data <- map_df(files, read_csv) %>%
 
 skimr::skim(ghg_data)
 
-emission <- split(ghg_data, ghg_data$series_code)
-
-methane <- emission$CH4
-carbondioxide <- emission$CO2
-shf <- emission$SF6
-pfc <- emission$PFC
-nf3  <- emission$NF3
-n2o <- emission$N2O
-hfc_pfc <- emission$MIX
-hfc <- emission$HFC
-ghg_no_lulucf <- emission$GH2
-ghg_lulucf <- emission$GHG
-
-
 ghg_data %>% 
   filter(series_code == "CH4") %>% 
   ggplot(aes(year, value, group = country_or_area))+
@@ -33,7 +18,7 @@ ghg_data %>%
   theme_light()
   #theme(legend.position = "none")
 
-ghg_data %>%
+ghg_data <- ghg_data %>%
   group_by(series_code, country_or_area) %>% 
   arrange(country_or_area, wt = year,
           .by_group = T) %>%
@@ -47,5 +32,7 @@ ghg_data %>%
          "year" = data_year,
          "value" = data_value,
          "lagged_value" = lagged_value_value) %>% 
-  mutate(percent_change = (value-lagged_value)/lagged_value * 100)
-  
+  mutate(percent_change = (value-lagged_value)/lagged_value * 100) %>% 
+  ungroup() %>% 
+  mutate_if(is.character, factor)
+
