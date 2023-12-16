@@ -59,3 +59,9 @@ ghg_data_long %>%
   rowwise() %>% 
   mutate(emistotal = sum(c_across(-1), na.rm = T))
 
+
+ghg_data_wide <- ghg_data_long %>% 
+  select(gas, region, year, value) %>% 
+  pivot_wider(names_from = year,
+              values_from = c(value),
+              values_fn = mean)
