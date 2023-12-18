@@ -26,6 +26,7 @@ ui <-
                                     choices = unique(ghg_data_long$region),
                                     multiple = T),
                         tableOutput("total_emission"),
+                        hr(),
                         # Sidebar with a slider input for number of bins 
                         sidebarLayout(
                           sidebarPanel(
@@ -34,17 +35,14 @@ ui <-
                                         min = min(ghg_data_long$year),
                                         max = max(ghg_data_long$year),
                                         value = c(1990, 2020)),
-                            checkboxGroupInput("plot_type", "Select Plot Type",
-                                               choices = c("line", "area", "bar"),
-                                               selected = "line")
+                            # Horizontal Line
+                            checkboxInput("line_plot", "Line Plot", TRUE),
+                            checkboxInput("area_plot", "Area Plot"),
+                            checkboxInput("bar_plot", "Bar Plot"),
                             ),
                           # Print total
                           # Show a plot of the generated distribution
-                          mainPanel(
-                            plotOutput("line_plot"),
-                            plotOutput("area_plot"),                   
-                            plotOutput("bar_plot")
-                            )
+                          mainPanel(plotOutput("combined_plot"))
                           )
                         )
                       ),
@@ -83,49 +81,30 @@ server <- function(input, output) {
       group_by(region, gas) %>%
       summarize(total = sum(value)) %>% 
       pivot_wider(names_from = gas,
-                  values_from = total) %>% 
-      rowwise() %>% 
-      mutate(emission_total = sum(c_across(-1), na.rm = T))
+                  values_from = total)
   })
   
   plot_object <- reactive({
     req(input$ghg, input$country, input$years)
     
     ghg_data_long %>% 
-      filter(gas == input$ghg & region == input$country) %>% 
-      filter(year >= input$years[1] & year <= input$years[2]) %>% 
-      ggplot(aes(year, value))
+      filter(gas %in% input$ghg & region %in%input$country) %>% 
+      filter(year >= input$years[1] & year <= input$years[2])
   })
   
 
-  output$line_plot <- renderPlot({
-   plot_object() +
-      geom_line(aes(col = region, lty = gas))+
-      labs(y = "Emission (kilitone)",
-           x = "year")+
-      theme_minimal()+
-      theme(legend.position = "right")
-     }, res = 96)
-  
-  output$area_plot <- renderPlot({
-    plot_object() +
-      geom_area(aes(fill = region), alpha = 0.6) +
-      labs(y = "Emission (kilitone)",
-           x = "year") +
-      theme_minimal() +
-      theme(legend.position = "top")+
-      facet_wrap(~gas, scales = "free_y")
-    }, res = 96)
-  
-  output$bar_plot <- renderPlot({
-    plot_object() +
-      geom_col(aes(fill = region), position = "dodge") +
-      labs(y = "Emission (kilitone)",
-           x = "year") +
-      theme_minimal() +
-      theme(legend.position = "top")+
-      facet_wrap(~gas, scales = "free_y")
-      }, res = 96)
-}
+  output$combined_plot <- renderPlot({
+   emission_plot <- ggplot(plot_object(), aes(year, value)) +
+     theme_minimal() +
+     theme(legend.position = "bottom")
+   if (input$line_plot) emission_plot <- emission_plot + geom_line(aes(col = region, lty = gas))
+   if (input$area_plot) emission_plot <- emission_plot + geom_area(aes(fill = region) ,alpha = 0.6) +
+       facet_wrap(~gas, scales = "free_y")
+   if (input$bar_plot) emission_plot <- emission_plot + geom_col(aes(fill = region), position = "dodge") +
+       facet_wrap(~gas, scales = "free_y")
+   
+   emission_plot
+  }, res = 100)
+  }
 # Run the application 
 shinyApp(ui = ui, server = server)

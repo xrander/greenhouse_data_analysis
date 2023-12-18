@@ -1,6 +1,7 @@
 library("tidyverse")
 library("janitor")
 
+
 files <- list.files(pattern = "\\.csv$", full.names = T)
 files <- files[-1]
 
@@ -65,3 +66,13 @@ ghg_data_wide <- ghg_data_long %>%
   pivot_wider(names_from = year,
               values_from = c(value),
               values_fn = mean)
+
+ghg_data_long %>% 
+  filter(gas %in% c("CH4", "N2O") & region %in% c("United Kingdom", "Canada", "Belgium")) %>% 
+  filter(year >= 1990 & year <= 2019) %>% 
+  group_by(region, gas) %>%
+  summarize(total = sum(value)) %>% 
+  pivot_wider(names_from = gas,
+              values_from = total) %>% 
+  rowwise() %>% 
+  ncol()
