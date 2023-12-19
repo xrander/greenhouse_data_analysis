@@ -8,6 +8,17 @@ ghg_data_long <- read_csv("ghg_pivot_longer.csv")
 ghg_data_long <- ghg_data_long %>% 
   select(2:7)
 
+na_to_zero <- function(x) {
+  ifelse(is.na(x), 0, x)
+  }
+
+ghg_data_wide <- ghg_data_long %>% 
+  select(gas, region, year, value) %>% 
+  pivot_wider(names_from = gas,
+              values_from = c(value),
+              values_fn = mean) %>%
+  mutate(across(-c(1:2), na_to_zero))
+
 # Define UI for application that draws a histogram
 ui <-
   navbarPage("Climate Insights: Global Greenhouse Gas Emissions Tracker (1990-2020)",
@@ -16,7 +27,7 @@ ui <-
              # first tab
              tabPanel("Dashboard",
                       fluidPage(
-                        # Application title
+                        # Page title
                         titlePanel("Interactive Emission Board"),
                         hr(),
                         selectInput("ghg", "Greenhouse gas",
@@ -96,7 +107,9 @@ server <- function(input, output) {
   output$combined_plot <- renderPlot({
    emission_plot <- ggplot(plot_object(), aes(year, value)) +
      theme_minimal() +
-     theme(legend.position = "bottom")
+     labs(x = "year",
+          y = "Emission in Kilotonne")+
+     theme(legend.position = "top")
    if (input$line_plot) emission_plot <- emission_plot + geom_line(aes(col = region, lty = gas))
    if (input$area_plot) emission_plot <- emission_plot + geom_area(aes(fill = region) ,alpha = 0.6) +
        facet_wrap(~gas, scales = "free_y")
@@ -104,7 +117,7 @@ server <- function(input, output) {
        facet_wrap(~gas, scales = "free_y")
    
    emission_plot
-  }, res = 100)
+  }, res = 96)
   }
 # Run the application 
 shinyApp(ui = ui, server = server)
