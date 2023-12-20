@@ -1,6 +1,9 @@
 library("shiny")
 library("shinythemes")
 library("tidyverse")
+library("plotly")
+library("hrbrthemes")
+library("viridis")
 library("janitor")
 
 ghg_data_long <- read_csv("ghg_pivot_longer.csv")
@@ -61,14 +64,30 @@ ui <-
              # second tab
              tabPanel("Comparison Tool",
                       fluidPage(
-                        titlePanel("Country and Gas Emission Comparison")
+                        titlePanel("Country and Gas Emission Comparison"),
+                        
+                        # Horizontal Line
+                        hr(),
+                        selectInput("region", "Country",
+                                    choices = unique(ghg_data_wide$region),
+                                    multiple = T), # Country selection
+                        selectInput("ghg_1", "GreenHouse Gas",
+                                    choices = unique(ghg_data_long$gas),
+                                    multiple = T), # Gas selection
+                        selectInput("year", "Year",
+                                    choices = unique(ghg_data_wide$year))
                         )
                       ),
              
              # third tab
              tabPanel("Predictive Modeling",
                       fluidPage(
-                        titlePanel("Future Emission Forecast: Predictive Insights")
+                        titlePanel("Future Emission Forecast: Predictive Insights"),
+                        
+                        #horizontal line
+                        hr(),
+                        selectInput("gas", "Greenhouse gas",
+                                    choices = unique(ghg_data_wide$region)),
                         )
                       ),
              
@@ -106,18 +125,24 @@ server <- function(input, output) {
 
   output$combined_plot <- renderPlot({
    emission_plot <- ggplot(plot_object(), aes(year, value)) +
-     theme_minimal() +
+     theme(legend.position = "top",
+           axis.title = element_text(face = "bold"))+
+     theme_ipsum() +
      labs(x = "year",
-          y = "Emission in Kilotonne")+
-     theme(legend.position = "top")
-   if (input$line_plot) emission_plot <- emission_plot + geom_line(aes(col = region, lty = gas))
-   if (input$area_plot) emission_plot <- emission_plot + geom_area(aes(fill = region) ,alpha = 0.6) +
-       facet_wrap(~gas, scales = "free_y")
-   if (input$bar_plot) emission_plot <- emission_plot + geom_col(aes(fill = region), position = "dodge") +
-       facet_wrap(~gas, scales = "free_y")
+          y = "Emissions in Kilotonne") 
+     
+   if (input$line_plot) emission_plot <- emission_plot + geom_line(aes(col = region, lty = gas))+
+       scale_color_viridis(discrete = T)
+   if (input$area_plot) emission_plot <- emission_plot + geom_area(aes(fill = region), 
+                                                                   position = "identity",alpha = 0.4) +
+       facet_wrap(~gas, scales = "free_y") +
+       scale_fill_viridis(discrete = T)
+   if (input$bar_plot) emission_plot <- emission_plot + geom_col(aes(fill = gas))+
+       scale_fill_viridis(discrete = T) +
+       facet_wrap(. ~ region, scales = "free_y", ncol = 2)
    
    emission_plot
-  }, res = 96)
+  }, res = 120)
   }
 # Run the application 
 shinyApp(ui = ui, server = server)
