@@ -98,3 +98,13 @@ ggplotly(ghg_data_wide_sample %>%
            scale_y_log10()+
            theme_minimal()+
            theme(legend.position = "none"))
+
+
+ghg_data_long %>%
+  filter(region %in% c("Australia","Canada") & gas %in% c("CH4", "CO2")) %>% 
+  filter(year == 1999) %>% 
+  ggplot(aes(region, value, fill = gas))+
+  geom_col()+
+  theme_ipsum_es(grid = "Y")+
+  scale_fill_viridis(discrete = T)+
+  scale_y_continuous(label = scales::comma)

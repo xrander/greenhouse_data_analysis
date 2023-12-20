@@ -68,14 +68,18 @@ ui <-
                         
                         # Horizontal Line
                         hr(),
-                        selectInput("region", "Country",
-                                    choices = unique(ghg_data_wide$region),
-                                    multiple = T), # Country selection
-                        selectInput("ghg_1", "GreenHouse Gas",
-                                    choices = unique(ghg_data_long$gas),
-                                    multiple = T), # Gas selection
-                        selectInput("year", "Year",
-                                    choices = unique(ghg_data_wide$year))
+                        sidebarPanel(
+                          selectInput("region", "Country",
+                                      choices = unique(ghg_data_wide$region),
+                                      multiple = T), # Country selection
+                          selectInput("ghg_1", "GreenHouse Gas",
+                                      choices = unique(ghg_data_long$gas),
+                                      multiple = T), # Gas selection
+                          selectInput("year", "Year",
+                                      choices = unique(ghg_data_wide$year))
+                          ),
+                        mainPanel(
+                          plotOutput("comparison_plot"))
                         )
                       ),
              
@@ -87,7 +91,7 @@ ui <-
                         #horizontal line
                         hr(),
                         selectInput("gas", "Greenhouse gas",
-                                    choices = unique(ghg_data_wide$region)),
+                                    choices = unique(ghg_data_wide$region))
                         )
                       ),
              
@@ -104,6 +108,17 @@ ui <-
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+  
+  # reactive element first tab
+  plot_object <- reactive({
+    req(input$ghg, input$country, input$years)
+    
+    ghg_data_long %>% 
+      filter(gas %in% input$ghg & region %in%input$country) %>% 
+      filter(year >= input$years[1] & year <= input$years[2])
+  })
+  
+  # first tab table output
   output$total_emission <- renderTable({
     ghg_data_long %>% 
       filter(gas %in% input$ghg & region %in% input$country) %>% 
@@ -114,34 +129,47 @@ server <- function(input, output) {
                   values_from = total)
   })
   
-  plot_object <- reactive({
-    req(input$ghg, input$country, input$years)
-    
-    ghg_data_long %>% 
-      filter(gas %in% input$ghg & region %in%input$country) %>% 
-      filter(year >= input$years[1] & year <= input$years[2])
-  })
   
-
+# First tab plot
   output$combined_plot <- renderPlot({
    emission_plot <- ggplot(plot_object(), aes(year, value)) +
-     theme(legend.position = "top",
-           axis.title = element_text(face = "bold"))+
-     theme_ipsum() +
+     theme_ipsum_rc(grid = "XY") +
+     scale_color_viridis(discrete = T)+
+     scale_y_continuous(label = scales::comma)+
      labs(x = "year",
-          y = "Emissions in Kilotonne") 
+          y = "Emissions (KTCO2e)",
+          title = paste0("Emission trend between", sep = " ", min(input$years), "and ", max(input$years)))+
+     theme(legend.position = "bottom",
+           axis.title = element_text(face = "bold"))
      
-   if (input$line_plot) emission_plot <- emission_plot + geom_line(aes(col = region, lty = gas))+
-       scale_color_viridis(discrete = T)
+   if (input$line_plot) emission_plot <- emission_plot + geom_line(aes(col = region, lty = gas))
    if (input$area_plot) emission_plot <- emission_plot + geom_area(aes(fill = region), 
-                                                                   position = "identity",alpha = 0.4) +
-       facet_wrap(~gas, scales = "free_y") +
-       scale_fill_viridis(discrete = T)
+                                                                   position = "identity",alpha = 0.4)
+       facet_wrap(~gas, scales = "free_y")
    if (input$bar_plot) emission_plot <- emission_plot + geom_col(aes(fill = gas))+
-       scale_fill_viridis(discrete = T) +
        facet_wrap(. ~ region, scales = "free_y", ncol = 2)
    
    emission_plot
+  }, res = 120)
+  
+  # reactive element tab 2
+  plot_object_2 <- reactive({
+    req(input$ghg_1, input$region, input$year)
+    
+    ghg_data_long %>% 
+      filter(gas %in% input$ghg_1 & region %in%input$region) %>% 
+      filter(year == input$year)
+  })
+  
+  output$comparison_plot <- renderPlot({
+    ggplot(plot_object_2())+
+      geom_col(aes(region, value, fill = gas))+
+      scale_y_continuous(label = scales::comma)+
+      scale_fill_viridis(discrete = T, alpha = 0.5)+
+      labs(x = "Country",
+           y = "Emission (KTCO2e)",
+           title = paste0("Year", sep = " ", input$year))+
+      theme_ipsum(grid = "XY")
   }, res = 120)
   }
 # Run the application 
