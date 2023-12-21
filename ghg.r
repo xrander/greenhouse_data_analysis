@@ -108,3 +108,5 @@ ghg_data_long %>%
   theme_ipsum_es(grid = "Y")+
   scale_fill_viridis(discrete = T)+
   scale_y_continuous(label = scales::comma)
+
+ghg_data_long

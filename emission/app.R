@@ -56,7 +56,7 @@ ui <-
                             ),
                           # Print total
                           # Show a plot of the generated distribution
-                          mainPanel(plotOutput("combined_plot"))
+                          mainPanel(plotlyOutput("combined_plot"))
                           )
                         )
                       ),
@@ -68,32 +68,37 @@ ui <-
                         
                         # Horizontal Line
                         hr(),
+                        hr(),
                         sidebarPanel(
-                          selectInput("region", "Country",
-                                      choices = unique(ghg_data_wide$region),
-                                      multiple = T), # Country selection
-                          selectInput("ghg_1", "GreenHouse Gas",
+                          selectInput("ghg", "Greenhouse gas",
                                       choices = unique(ghg_data_long$gas),
-                                      multiple = T), # Gas selection
-                          selectInput("year", "Year",
-                                      choices = unique(ghg_data_wide$year))
-                          ),
-                        mainPanel(
-                          plotOutput("comparison_plot"))
+                                      multiple = T),
+                          selectInput("country", "Select Region or Country",
+                                      choices = unique(ghg_data_long$region),
+                                      multiple = T),
+                          sliderInput("years",
+                                      "Year range:",
+                                      min = min(ghg_data_long$year),
+                                      max = max(ghg_data_long$year),
+                                      value = c(1990, 2020)),
+                          checkboxInput("line_plot", "Line Plot", TRUE),
+                          checkboxInput("bar_plot", "Bar Plot"),
+                          
+                          mainPanel(plotlyOutput("comparison_plot"))
+                          )
                         )
                       ),
              
              # third tab
              tabPanel("Predictive Modeling",
                       fluidPage(
-                        titlePanel("Future Emission Forecast: Predictive Insights"),
+                        titlePanel("Future Emission Forecast: Predictive Insights")
                         
                         #horizontal line
-                        hr(),
-                        selectInput("gas", "Greenhouse gas",
-                                    choices = unique(ghg_data_wide$region))
-                        )
-                      ),
+                        
+                          # Horizontal Line
+                          )
+                        ),
              
              # fourth tab
              tabPanel("Scenario Analysis"),
@@ -131,14 +136,14 @@ server <- function(input, output) {
   
   
 # First tab plot
-  output$combined_plot <- renderPlot({
+  output$combined_plot <- renderPlotly({
    emission_plot <- ggplot(plot_object(), aes(year, value)) +
      theme_ipsum_rc(grid = "XY") +
-     scale_color_viridis(discrete = T)+
-     scale_y_continuous(label = scales::comma)+
+     scale_color_viridis(discrete = T) +
+     scale_y_continuous(label = scales::comma) +
      labs(x = "year",
           y = "Emissions (KTCO2e)",
-          title = paste0("Emission trend between", sep = " ", min(input$years), "and ", max(input$years)))+
+          title = paste0("Emission trend between", sep = " ", min(input$years), "and ", max(input$years))) +
      theme(legend.position = "bottom",
            axis.title = element_text(face = "bold"))
      
@@ -146,31 +151,36 @@ server <- function(input, output) {
    if (input$area_plot) emission_plot <- emission_plot + geom_area(aes(fill = region), 
                                                                    position = "identity",alpha = 0.4)
        facet_wrap(~gas, scales = "free_y")
-   if (input$bar_plot) emission_plot <- emission_plot + geom_col(aes(fill = gas))+
+   if (input$bar_plot) emission_plot <- emission_plot + geom_col(aes(fill = gas)) +
        facet_wrap(. ~ region, scales = "free_y", ncol = 2)
    
-   emission_plot
-  }, res = 120)
-  
-  # reactive element tab 2
-  plot_object_2 <- reactive({
-    req(input$ghg_1, input$region, input$year)
-    
-    ghg_data_long %>% 
-      filter(gas %in% input$ghg_1 & region %in%input$region) %>% 
-      filter(year == input$year)
+       ggplotly(emission_plot)
+   
   })
   
-  output$comparison_plot <- renderPlot({
-    ggplot(plot_object_2())+
-      geom_col(aes(region, value, fill = gas))+
-      scale_y_continuous(label = scales::comma)+
-      scale_fill_viridis(discrete = T, alpha = 0.5)+
-      labs(x = "Country",
-           y = "Emission (KTCO2e)",
-           title = paste0("Year", sep = " ", input$year))+
-      theme_ipsum(grid = "XY")
-  }, res = 120)
+  # reactive element tab 2
+  
+  output$comparison_plot <- renderPlotly({
+    comparison <- ggplot(plot_object())+
+      theme_ipsum_es(grid = "XY")
+    
+    if(unique(length(input$years) >= 5) & input$line_plot) comparison <-
+        comparison + geom_line(aes(years, value, col = region)) +
+        scale_y_continuous(label = scales::comma)+
+        labs(x = "year",
+             y = "Emission (KTCO2e)",
+             title = paste0("Emission from", sep = " ", min(input$years), sep = " ","to", max(input$years)))
+        
+    if(unique(length(input$years <= 5) & input$bar_plot)) comparison <- 
+        comparison + geom_col(aes(region, value, fill = gas)) +
+        scale_y_continuous(label = scales::comma)+
+        labs(x = "Country",
+             y = "Emission (KTCO2e)",
+             title = paste0("Year", sep = " ", input$yearrs))
+    
+    ggplotly(comparison)
+    })
+    
   }
 # Run the application 
 shinyApp(ui = ui, server = server)
