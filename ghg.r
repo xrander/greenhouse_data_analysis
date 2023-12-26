@@ -1,28 +1,74 @@
+# Set work directory
 setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/")
-library("plotly")
+
+# 
 library("tidyverse")
+library("plotly")
+library("hrbrthemes")
+library("viridis")
 library("janitor")
 
-
 files <- list.files(pattern = "\\.csv$", full.names = T)
-files <- files[-c(1,2)]
+
+# files
+files <- files[-c(1,2)] # previously saved csv files from when script was original developed are removed.
+# uncomment and run 'files' first before running this code.
 
 
 ghg_data <- map_df(files, read_csv) %>% 
   clean_names() %>% 
-  select(-country_or_area_code)
+  select(-country_or_area_code) %>% 
+  rename("gas" = series_code,
+         "region" = country_or_area,
+         "emission_value" = value) %>% 
+  mutate_if(is.character, factor)
 
 
-skimr::skim(ghg_data)
+skimr::skim_without_charts(ghg_data)
 
 ghg_data %>% 
-  ggplot(aes(series_code))+
-  geom_bar()
-  #theme(legend.position = "none")
+  group_by(region, gas) %>% 
+  count(gas)
+
+ghg_data %>%
+  group_by(gas) %>% 
+  summarize(number = n()) %>% 
+  ggplot(aes(fct_reorder(gas, number), number, fill = gas))+
+  geom_col()+
+  theme_ipsum_es()+
+  coord_flip()
+
+ghg_data %>% 
+  group_by(year, gas) %>% 
+  summarize(total_emissions = sum(emission_value)) # First result for dashboard
+  
+ghg_data %>%
+  #filter(year %in% year) %>% 
+  mutate(gas = fct_collapse(gas,
+                            "Others" = c("HFC", "MIX", "N2O", "NF3", "PFC", "SF6"))) %>% 
+  group_by(gas) %>%
+  summarize(emission = sum(emission_value)) %>%
+  mutate(gas_proportion = round(emission/sum(emission) * 100, 1),
+         ylab_pos = cumsum(gas_proportion) - 0.5 * gas_proportion) %>% 
+  ggplot(aes(x = 1, gas_proportion, fill = gas))+
+  geom_col(position = "stack", width = 1, color = "white")+
+  coord_polar("y", direction = 1, start = 0)+
+  theme_void()+
+  geom_text(aes(x = 1, y = ylab_pos, label = paste0(gas_proportion, "%", sep = "")), col = "white")  # second dashboard result,
+# should only filter by year as some of the gases emission are too low and disrupts the visualization,
+# they are therefore collapsed.
+
+ghg_data %>% 
+  group_by(region, gas) %>% 
+  
+  
+
+
 
 ghg_data <- ghg_data %>% 
   mutate_if(is.character, factor)
 
+ghg_data
 
 ghg_data_long <- ghg_data %>%
   group_by(series_code, country_or_area) %>% 
@@ -109,4 +155,6 @@ ghg_data_long %>%
   scale_fill_viridis(discrete = T)+
   scale_y_continuous(label = scales::comma)
 
+scales::
 ghg_data_long
+
