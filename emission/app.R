@@ -1,188 +1,120 @@
 library("shiny")
 library("shinydashboard")
 library("shinyWidgets")
-library("shinythemes")
 library("tidyverse")
 library("plotly")
 library("hrbrthemes")
 library("viridis")
 library("janitor")
 
-ghg_data_long <- read_csv("ghg_pivot_longer.csv")
+setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/")
 
-ghg_data_long <- ghg_data_long %>% 
-  select(2:7)
 
-na_to_zero <- function(x) {
-  ifelse(is.na(x), 0, x)
-  }
+files <- list.files(pattern = "\\.csv$", full.names = T)
 
-ghg_data_wide <- ghg_data_long %>% 
-  select(gas, region, year, value) %>% 
-  pivot_wider(names_from = gas,
-              values_from = c(value),
-              values_fn = mean) %>%
-  mutate(across(-c(1:2), na_to_zero))
+# files
+files <- files[-c(1,2)] # previously saved csv files from when script was original developed are removed.
+# uncomment and run 'files' first before running this code.
 
-# Define UI for application that draws a histogram
-ui <-
-  navbarPage("Climate Insights: Global Greenhouse Gas Emissions Tracker (1990-2020)",
-             theme = shinytheme("cerulean"),
-             
-             # first tab
-             tabPanel("Dashboard",
-                      fluidPage(
-                        # Page title
-                        titlePanel("Interactive Emission Board"),
-                        hr(),
-                        selectInput("ghg", "Greenhouse gas",
-                                    choices = unique(ghg_data_long$gas),
-                                    multiple = T),
-                        selectInput("country", "Select Region or Country",
-                                    choices = unique(ghg_data_long$region),
-                                    multiple = T),
-                        tableOutput("total_emission"),
-                        hr(),
-                        # Sidebar with a slider input for number of bins 
-                        sidebarLayout(
-                          sidebarPanel(
-                            sliderInput("years",
-                                        "Year range:",
-                                        min = min(ghg_data_long$year),
-                                        max = max(ghg_data_long$year),
-                                        value = c(1990, 2020)),
-                            # Horizontal Line
-                            checkboxInput("line_plot", "Line Plot", TRUE),
-                            checkboxInput("area_plot", "Area Plot"),
-                            checkboxInput("bar_plot", "Bar Plot"),
+
+ghg_data <- map_df(files, read_csv) %>% 
+  clean_names() %>% 
+  select(-2) %>% 
+  rename("gas" = series_code,
+         "region" = country_or_area,
+         "emission_value" = value) %>%
+  mutate_if(is.character, factor)
+
+
+ui <- ui <- dashboardPage(skin = "green",
+                          dashboardHeader(title = "GHG Emission Explorer (1990 - 2020)",
+                                          titleWidth = 400),
+                          dashboardSidebar(
+                            sidebarMenu(
+                              menuItem("Overview", tabName = "overview",
+                                       icon = icon("dashboard", lib = "glyphicon")),
+                              menuItem("Comparison Tool", tabName = "comparison",
+                                       icon = icon("duplicate", lib = "glyphicon")), # to include map
+                              menuItem("Scenario Analysis", tabName = "scenario",
+                                       icon = icon("hourglass", lib = "glyphicon")),
+                              menuItem("Predictive Analysis", tabName = "predictive_analysis",
+                                       icon = icon("stats", lib = "glyphicon"))
+                              )
                             ),
-                          # Print total
-                          # Show a plot of the generated distribution
-                          mainPanel(plotlyOutput("combined_plot"))
+                          dashboardBody(
+                            tabItems(
+                              tabItem(
+                                tabName = "overview",
+                                h1("Overview of Emissions"),
+                                
+                                fluidRow(
+                                  valueBoxOutput("total_emission",
+                                                 width = 4),
+                                  
+                                  box(
+                                    width = 4,
+                                    title = "Proportion of Gas Emission",
+                                    plotlyOutput("piechart")
+                                    ),
+                                  
+                                  box(
+                                    title = "Top Emitting Countries",
+                                    width = 4,
+                                    status = "success",
+                                    tableOutput("top_emitting_country")
+                                    )
+                                  ),
+                                pickerInput("ghg",
+                                            "Greenhouse gas",
+                                            choices = unique(ghg_data$gas),
+                                            options = list(`actions-box` = T),
+                                            multiple = T),
+                                
+                                pickerInput("country", "Select Region or Country",
+                                            choices = unique(ghg_data$region),
+                                            options = list(`actions-box` = T),
+                                            multiple = T)
+                                ),
+
+                            tabItem(
+                              tabName = "comparison",
+                              h2("Comparison Tool")
+                              ),
+                            tabItem(
+                              tabName = "scenario",
+                              h2("Scenario Analysis")
+                              ),
+                            tabItem(
+                              tabName = "predictive_analysis",
+                              h2("Predictive Analysis")
+                              )
+                            )
+                            )
                           )
-                        )
-                      ),
-             
-             # second tab
-             tabPanel("Comparison Tool",
-                      fluidPage(
-                        titlePanel("Country and Gas Emission Comparison"),
-                        
-                        # Horizontal Line
-                        hr(),
-                        hr(),
-                        sidebarPanel(
-                          selectInput("ghg", "Greenhouse gas",
-                                      choices = unique(ghg_data_long$gas),
-                                      multiple = T),
-                          selectInput("country", "Select Region or Country",
-                                      choices = unique(ghg_data_long$region),
-                                      multiple = T),
-                          sliderInput("years",
-                                      "Year range:",
-                                      min = min(ghg_data_long$year),
-                                      max = max(ghg_data_long$year),
-                                      value = c(1990, 2020)),
-                          checkboxInput("line_plot", "Line Plot", TRUE),
-                          checkboxInput("bar_plot", "Bar Plot"),
-                          
-                          mainPanel(plotlyOutput("comparison_plot"))
-                          )
-                        )
-                      ),
-             
-             # third tab
-             tabPanel("Predictive Modeling",
-                      fluidPage(
-                        titlePanel("Future Emission Forecast: Predictive Insights")
-                        
-                        #horizontal line
-                        
-                          # Horizontal Line
-                          )
-                        ),
-             
-             # fourth tab
-             tabPanel("Scenario Analysis"),
-             
-             # fifth tab
-             tabPanel("Emissions Heatmap"),
-             
-             # sixth tab
-             tabPanel("Correlation Analysis")
-             )
 
 
-# Define server logic required to draw a histogram
+
 server <- function(input, output) {
   
-  # reactive element first tab
-  plot_object <- reactive({
-    req(input$ghg, input$country, input$years)
-    
-    ghg_data_long %>% 
-      filter(gas %in% input$ghg & region %in%input$country) %>% 
-      filter(year >= input$years[1] & year <= input$years[2])
-  })
-  
-  # first tab table output
-  output$total_emission <- renderTable({
-    ghg_data_long %>% 
-      filter(gas %in% input$ghg & region %in% input$country) %>% 
-      filter(year >= input$years[1] & year <= input$years[2]) %>% 
-      group_by(region, gas) %>%
-      summarize(total = sum(value)) %>% 
-      pivot_wider(names_from = gas,
-                  values_from = total)
-  })
-  
-  
-# First tab plot
-  output$combined_plot <- renderPlotly({
-   emission_plot <- ggplot(plot_object(), aes(year, value)) +
-     theme_ipsum_rc(grid = "XY") +
-     scale_color_viridis(discrete = T) +
-     scale_y_continuous(label = scales::comma) +
-     labs(x = "year",
-          y = "Emissions (KTCO2e)",
-          title = paste0("Emission trend between", sep = " ", min(input$years), "and ", max(input$years))) +
-     theme(legend.position = "bottom",
-           axis.title = element_text(face = "bold"))
-     
-   if (input$line_plot) emission_plot <- emission_plot + geom_line(aes(col = region, lty = gas))
-   if (input$area_plot) emission_plot <- emission_plot + geom_area(aes(fill = region), 
-                                                                   position = "identity",alpha = 0.4)
-       facet_wrap(~gas, scales = "free_y")
-   if (input$bar_plot) emission_plot <- emission_plot + geom_col(aes(fill = gas)) +
-       facet_wrap(. ~ region, scales = "free_y", ncol = 2)
-   
-       ggplotly(emission_plot)
-   
-  })
-  
-  # reactive element tab 2
-  
-  output$comparison_plot <- renderPlotly({
-    comparison <- ggplot(plot_object())+
-      theme_ipsum_es(grid = "XY")
-    
-    if(unique(length(input$years) >= 5) & input$line_plot) comparison <-
-        comparison + geom_line(aes(years, value, col = region)) +
-        scale_y_continuous(label = scales::comma)+
-        labs(x = "year",
-             y = "Emission (KTCO2e)",
-             title = paste0("Emission from", sep = " ", min(input$years), sep = " ","to", max(input$years)))
-        
-    if(unique(length(input$years <= 5) & input$bar_plot)) comparison <- 
-        comparison + geom_col(aes(region, value, fill = gas)) +
-        scale_y_continuous(label = scales::comma)+
-        labs(x = "Country",
-             y = "Emission (KTCO2e)",
-             title = paste0("Year", sep = " ", input$yearrs))
-    
-    ggplotly(comparison)
-    })
+  output$total_emission <- renderValueBox(
+    {
+      valueBox(
+        ghg_data %>% 
+        filter(year == input$single_year & gas %in% input$single_gas) %>% 
+        group_by(year, gas) %>% 
+        summarize(total_emission = sum(emission_value)) %>% 
+        pull(emission_value) %>% 
+        sum() %>% 
+        round(1) %>% 
+        paste0(" KCO2e", sep = " "),
+        "Total Emission",
+        icon = icon("cloud_upload", lib = "glyphicon"),
+        color = "olive"
+        )
     
   }
-# Run the application 
-shinyApp(ui = ui, server = server)
+  )
+  
+}
+
+shinyApp(ui, server)
