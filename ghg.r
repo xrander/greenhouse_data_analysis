@@ -45,26 +45,42 @@ ghg_data %>%
   sum() %>%
   round(1) %>% 
   paste0(" KCO2e", sep = " ")# First table result for dashboard 1
+
+
+format_large_number <- function(x) {
+  if(x >= 1e12) {
+    return(paste(format(round(x/1e12), nsmall = 1), " Trillion"))
+  } else if (x >=1e9) {
+      return(paste(format(round(x/1e9), nsmall = 1), "Billion"))
+    } else if (x >=1e6) {
+      return(paste(format(round(x/1e6), nsmall = 1), "Million"))
+    } else if (x >=1e3) {
+      return(paste(format(round(x/1e3), nsmall = 1), "Thousand"))
+    } else {
+      return(as.character(x))
+    }
+}
+
+ghg_data %>% 
+  filter(year %in% c(1990:2000) & gas == c("MIX", "CH4")) %>% 
+  group_by(gas) %>% 
+  summarize(total_emission = sum(emission_value)) %>% 
+  pull(total_emission) %>% 
+  sum() %>% 
+  format_large_number()
+
+
   
 ghg_data %>%
-  # to be filtered by year (year %in% year) 
+  filter(year == 2020) %>% # to be filtered by year
   mutate(gas = fct_collapse(gas,
                             "Others" = c("HFC", "MIX", "N2O", "NF3", "PFC", "SF6"))) %>% 
   group_by(gas) %>%
   summarize(emission = sum(emission_value)) %>%
   mutate(gas_proportion = round(emission/sum(emission) * 100, 1),
-         ylab_pos = cumsum(gas_proportion) - 0.5 * gas_proportion) %>% 
-  ggplot(aes(x = 1, gas_proportion, fill = gas))+
-  geom_col(position = "stack", width = 1, color = "white")+
-  coord_polar("y", direction = 1, start = 0)+
-  labs(fill = "")+
-  geom_text(aes(x = 1,
-                y = ylab_pos,
-                label = paste0(gas_proportion, "%", sep = "")),
-            col = "white")  +
-  theme(legend.position = "bottom",
-        plot.title = element_text(size = 24, color = "gray"))+
-  theme_void()
+         ylab_pos = cumsum(gas_proportion) - 0.35 * gas_proportion) %>% 
+  plot_ly(labels = ~gas, values = ~gas_proportion, type = "pie")
+
 
 #  second plot, dashboard 1 result,
 # should only filter by year as some of the gases emission are too low and disrupts the visualization,

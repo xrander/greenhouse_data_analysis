@@ -17,6 +17,7 @@ files <- files[-c(1,2)] # previously saved csv files from when script was origin
 # uncomment and run 'files' first before running this code.
 
 
+
 ghg_data <- map_df(files, read_csv) %>% 
   clean_names() %>% 
   select(-2) %>% 
@@ -25,6 +26,24 @@ ghg_data <- map_df(files, read_csv) %>%
          "emission_value" = value) %>%
   mutate_if(is.character, factor)
 
+
+format_large_number <- function(x) {
+  if(x >= 1e12) {
+    return(paste(format(round(x/1e12), nsmall = 1), " Trillion"))
+  } else if (x >=1e9) {
+    return(paste(format(round(x/1e9), nsmall = 1), "Billion"))
+  } else if (x >=1e6) {
+    return(paste(format(round(x/1e6), nsmall = 1), "Million"))
+  } else if (x >=1e3) {
+    return(paste(format(round(x/1e3), nsmall = 1), "Thousand"))
+  } else {
+    return(as.character(x))
+  }
+} # output needed to be in readable format and not long numbers
+
+ghg_pie <-ghg_data %>%
+  mutate(gas2 = fct_collapse(gas,
+                            "Others" = c("HFC", "MIX", "N2O", "NF3", "PFC", "SF6")))
 
 ui <- ui <- dashboardPage(skin = "green",
                           dashboardHeader(title = "GHG Emission Explorer (1990 - 2020)",
@@ -48,32 +67,41 @@ ui <- ui <- dashboardPage(skin = "green",
                                 h1("Overview of Emissions"),
                                 
                                 fluidRow(
-                                  valueBoxOutput("total_emission",
-                                                 width = 4),
-                                  
                                   box(
-                                    width = 4,
-                                    title = "Proportion of Gas Emission",
-                                    plotlyOutput("piechart")
-                                    ),
+                                    pickerInput("single_year", "Select Year",
+                                                choices = unique(ghg_data$year),
+                                                options = list(`actions-box` = T),
+                                                multiple = T,
+                                                selected = 2010),
+                                    pickerInput("single_gas", "Select Greenhouse Gas",
+                                                choices = unique(ghg_data$gas),
+                                                options = list(`actions-box` = T),
+                                                multiple = T,
+                                                selected = "CH4"),
+                                    width = 2,
+                                    background = "olive"
+                                  ),
                                   
                                   box(
                                     title = "Top Emitting Countries",
                                     width = 4,
-                                    status = "success",
-                                    tableOutput("top_emitting_country")
+                                    status = "danger",
+                                    solidHeader = T,
+                                    collapsible = T,
+                                    plotOutput("top_emitting_countries")
+                                  ), 
+                                  
+                                  infoBoxOutput("total_emission", width = 2),
+                                  
+                                  box(
+                                    width = 4,
+                                    title = "Proportion of Gas Emission",
+                                    plotlyOutput("piechart"),
+                                    status = "warning",
+                                    solidHeader = T,
+                                    collapsible = T
                                     )
-                                  ),
-                                pickerInput("ghg",
-                                            "Greenhouse gas",
-                                            choices = unique(ghg_data$gas),
-                                            options = list(`actions-box` = T),
-                                            multiple = T),
-                                
-                                pickerInput("country", "Select Region or Country",
-                                            choices = unique(ghg_data$region),
-                                            options = list(`actions-box` = T),
-                                            multiple = T)
+                                  )
                                 ),
 
                             tabItem(
@@ -96,25 +124,56 @@ ui <- ui <- dashboardPage(skin = "green",
 
 server <- function(input, output) {
   
-  output$total_emission <- renderValueBox(
-    {
-      valueBox(
-        ghg_data %>% 
-        filter(year == input$single_year & gas %in% input$single_gas) %>% 
-        group_by(year, gas) %>% 
-        summarize(total_emission = sum(emission_value)) %>% 
-        pull(emission_value) %>% 
-        sum() %>% 
-        round(1) %>% 
-        paste0(" KCO2e", sep = " "),
-        "Total Emission",
-        icon = icon("cloud_upload", lib = "glyphicon"),
-        color = "olive"
-        )
-    
-  }
-  )
+  output$total_emission <- renderInfoBox({
+     infoBox(
+       "Total Emission",
+       paste0(ghg_data %>% 
+                filter(year %in% input$single_year & gas %in% input$single_gas) %>% 
+                group_by(gas) %>% 
+                summarize(total_emission = sum(emission_value)) %>% 
+                pull(total_emission) %>% 
+                sum() %>% 
+                format_large_number()," KTCO2e", sep = " "),
+       icon = icon("cloud", lib = "glyphicon"), color = "red",
+       fill = T)
+    })
   
-}
+  output$top_emitting_countries <- renderPlot({
+    ghg_data %>% 
+      filter(year %in% input$single_year & gas %in% input$single_gas) %>% 
+      group_by(region) %>% 
+      summarize(total_emission = sum(emission_value)) %>% 
+      arrange(desc(total_emission)) %>% 
+      top_n(n = 10, wt = total_emission) %>% 
+      ggplot(aes(fct_reorder(region, total_emission), total_emission, fill = total_emission)) +
+      geom_bar(stat = "identity",
+               show.legend = F)+
+      labs(x = "Region",
+           y = "Emission in KTCO2e")+
+      scale_fill_distiller(palette = "Reds",
+                           direction = 1)+
+      scale_y_continuous(label = scales::comma)+
+      coord_flip()+
+      theme_minimal()+
+      theme(axis.title = element_text(face = "bold",
+                                      size = 12),
+            axis.text = element_text(face = "bold.italic",
+                                     size = 9))
+  })
+  
+  output$piechart <- renderPlotly({
+    ghg_pie %>%
+      filter(year %in% input$single_year) %>% 
+      group_by(gas2) %>%
+      summarize(total_emission = sum(emission_value)) %>%
+      mutate(gas_proportion = round(total_emission/sum(total_emission) * 100, 1),
+             ylab_pos = cumsum(gas_proportion + 1) - 0.5 * gas_proportion) %>% 
+      plot_ly(labels = ~gas2, values = ~gas_proportion, type = "pie",
+              textposition = "inside",
+              textinfo = "label+percent",
+              showlegend = F)
+
+  })
+  }
 
 shinyApp(ui, server)
