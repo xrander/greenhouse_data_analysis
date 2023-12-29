@@ -82,6 +82,8 @@ ui <- ui <- dashboardPage(skin = "green",
                                     background = "olive"
                                   ),
                                   
+                                  infoBoxOutput("total_emission", width = 2),
+                                  
                                   box(
                                     title = "Top Emitting Countries",
                                     width = 4,
@@ -91,7 +93,6 @@ ui <- ui <- dashboardPage(skin = "green",
                                     plotOutput("top_emitting_countries")
                                   ), 
                                   
-                                  infoBoxOutput("total_emission", width = 2),
                                   
                                   box(
                                     width = 4,
@@ -101,7 +102,27 @@ ui <- ui <- dashboardPage(skin = "green",
                                     solidHeader = T,
                                     collapsible = T
                                     )
+                                  ),
+                                
+                                fluidRow(
+                                  column(width = 12,
+                                         box(
+                                           width = 3,
+                                           background = "green",
+                                           sliderTextInput("year_range", "Choose year range",
+                                                           choices = sort(unique(ghg_data$year)),
+                                                           selected = c(1990, 2010),
+                                                           grid = T),
+                                         ),
+                                         box(
+                                           status = "warning",
+                                           solidHeader = T,
+                                           plotlyOutput("emis_trend"),
+                                           width = 9)
+                                         )
                                   )
+                                
+                                
                                 ),
 
                             tabItem(
@@ -147,14 +168,14 @@ server <- function(input, output) {
       top_n(n = 10, wt = total_emission) %>% 
       ggplot(aes(fct_reorder(region, total_emission), total_emission, fill = total_emission)) +
       geom_bar(stat = "identity",
-               show.legend = F)+
+               show.legend = F) +
       labs(x = "Region",
-           y = "Emission in KTCO2e")+
+           y = "Emission in KTCO2e") +
       scale_fill_distiller(palette = "Reds",
-                           direction = 1)+
-      scale_y_continuous(label = scales::comma)+
-      coord_flip()+
-      theme_minimal()+
+                           direction = 1) +
+      scale_y_continuous(label = scales::comma) +
+      coord_flip() +
+      theme_tinyhand() +
       theme(axis.title = element_text(face = "bold",
                                       size = 12),
             axis.text = element_text(face = "bold.italic",
@@ -173,6 +194,24 @@ server <- function(input, output) {
               textinfo = "label+percent",
               showlegend = F)
 
+  })
+  
+  output$emis_trend <- renderPlotly({
+    emis_plot <- ghg_data %>% 
+      filter(between(year, min(input$year_range), max(input$year_range))) %>%
+      group_by(year, gas) %>% 
+      summarize(emission_value = sum(emission_value)) %>% 
+      ggplot(aes(year, emission_value, col = gas, fill = gas)) +
+      geom_line()+
+      geom_area(alpha = 0.7)+
+      theme_tinyhand() +
+      labs(y = "Emissions (KTCO2e)",
+           x = "Year",
+           title = paste0("Emission from", sep = "", min(input$year_range), " to ", max(input$year_range))) +
+      
+      scale_y_continuous(labels = scales::comma)# 4th result to be used for dashboard 1
+    
+    ggplotly(emis_plot)
   })
   }
 

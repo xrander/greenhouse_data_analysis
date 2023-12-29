@@ -81,7 +81,6 @@ ghg_data %>%
          ylab_pos = cumsum(gas_proportion) - 0.35 * gas_proportion) %>% 
   plot_ly(labels = ~gas, values = ~gas_proportion, type = "pie")
 
-
 #  second plot, dashboard 1 result,
 # should only filter by year as some of the gases emission are too low and disrupts the visualization,
 # they are therefore collapsed.
@@ -93,6 +92,22 @@ ghg_data %>%
   arrange(desc(total_emission)) %>% 
   top_n(n = 10, wt = total_emission) # result 3 to be used for dashboard 1, title: top_emitting_countries. 
   
+
+ghg_data %>% 
+  filter(year %in% c(1990, 2020)) %>%  # slider year is input for shiny
+  ggplot(aes(year, emission_value, col = gas))+
+  geom_line()+
+  #geom_area(aes(fill = gas), alpha = 0.7)+
+  #scale_y_log10()+
+  scale_y_continuous(labels = scales::comma)# 4th result to be used for dashboard 1
+
+
+ghg_data %>% 
+  select(year, gas, emission_value) %>% 
+  group_by(year, gas) %>% 
+  summarize(emis = sum(emission_value)) %>% 
+  ggplot(aes(year, emis, group = gas, col = gas))+
+  geom_line()
 
 un_population <- read_csv("population_data.csv",
                           col_types = list("Country or Area" = col_character(),
@@ -116,13 +131,7 @@ un_population <- un_population %>%
          "population" = "Value")
 
 
-ghg_data %>% 
-  filter(region == "United States of America", between(year, 1990, 2020)) %>%  # region and year are input for shiny
-  ggplot(aes(year, emission_value, col = gas))+
-  geom_line()+
-  #geom_area(aes(fill = gas), alpha = 0.7)+
-  #scale_y_log10()+
-  scale_y_continuous(labels = scales::comma)# 4th result to be used for dashboard 1
+
 
 ghg_data_long <- ghg_data %>%
   group_by(series_code, country_or_area) %>% 
