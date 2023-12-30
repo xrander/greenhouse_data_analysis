@@ -127,7 +127,26 @@ ui <- ui <- dashboardPage(skin = "green",
 
                             tabItem(
                               tabName = "comparison",
-                              h2("Comparison Tool")
+                              h2("Comparison Tool"),
+                              
+                              fluidRow(
+                                box(
+                                  title = "Regional Comparison of GHG Emission",
+                                  h6("Only a gas can be selected here, the goal of the chart is to show
+                                     how each gas compares across the various regions."),
+                                  pickerInput("gas", "Select Gas",
+                                              choices = unique(ghg_data$gas),
+                                              options = list(style = "btn-warning")),
+                                  sliderTextInput("year_range_2", " Select Time Span",
+                                                  choices = sort(unique(ghg_data$year)),
+                                                  selected = c(1990, 2005),
+                                                  from_min = 1990,
+                                                  from_max = 2000,
+                                                  to_min = 2010,
+                                                  to_max = 2020)
+                                  ),
+                                box(plotlyOutput("comp_plot"))
+                              )
                               ),
                             tabItem(
                               tabName = "scenario",
@@ -212,6 +231,15 @@ server <- function(input, output) {
       scale_y_continuous(labels = scales::comma)# 4th result to be used for dashboard 1
     
     ggplotly(emis_plot)
+  })
+  
+  output$comp_plot <- renderPlotly({
+    comp_plot <- ghg_data %>% 
+      filter(gas == input$gas & between(year, min(input$year_range_2), max(input$year_range_2))) %>% 
+      ggplot(aes(year, emission_value, col = region))+
+      geom_line()
+    
+    ggplotly(comp_plot)
   })
   }
 
