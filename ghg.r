@@ -7,6 +7,9 @@ library("plotly")
 library("hrbrthemes")
 library("viridis")
 library("janitor")
+library("scales")
+
+
 
 files <- list.files(pattern = "\\.csv$", full.names = T)
 
@@ -109,7 +112,7 @@ ghg_data %>%
   ggplot(aes(year, emis, group = gas, col = gas))+
   geom_line()
 
-un_population <- read_csv("population_data.csv",
+un_population <- read_csv("/home/xrander/Documents/Data Science/Personal Project/ghg_data_analysis/data/population_data.csv",
                           col_types = list("Country or Area" = col_character(),
                                            "Year" = col_double(),
                                            "Area" = col_character(),
@@ -137,7 +140,6 @@ EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denma
         "Spain", "Sweden") # EU is not represented as a data point.
                           #list will be created to include EU in the data point
 
-
 eu_pop <- un_population %>% 
   filter(region %in% EU) %>% 
   mutate(is_eu = "European Union") %>% 
@@ -147,7 +149,9 @@ eu_pop <- un_population %>%
   relocate(region)
 
 un_population <- un_population %>% 
-  bind_rows(eu_pop)
+  bind_rows(eu_pop) %>% 
+  mutate(region = ifelse(region == "United Kingdom of Great Britain and Northern Ireland",
+                         "United Kingdom", region))
 
 # The same will be repeated for the GDP Per Capital
 
@@ -163,18 +167,43 @@ eu_per_capital <- un_per_capital %>%
 
 un_per_capital <- un_per_capital %>% 
   rename("per_capital" = gdp) %>% 
-  bind_rows(eu_per_capital)
+  bind_rows(eu_per_capital) %>% 
+  mutate(region = case_when(region == "United States" ~ "United States of America",
+                            region == "United Kingdom of Great Britain and Northern Ireland" ~ "United Kingdom",
+                            region != "United States" ~ region))
 
-un_population %>% 
+un_data <- un_population %>% 
   left_join(un_per_capital, join_by(region, year))
 
+un_data <- un_data %>% 
+  group_by(region, year) %>% 
+  summarize(population = mean(population, na.rm = T),
+            per_capital = mean(per_capital, na.rm = T))
 
+un_data <- un_data[complete.cases(un_data), ]
+
+ghg_data <- ghg_data %>% 
+  left_join(un_data, join_by(region, year))
 
 
 ghg_data %>% 
-  select(region, gas) %>% 
-  group_by(gas) %>% 
-  summarize(total = n(region))
+  filter(year == 2020) %>% 
+  ggplot(aes(population, per_capital, size = emission_value)) +
+  geom_point(aes(col = region),
+             show.legend = F) +
+  theme_tinyhand()+
+  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                 labels = trans_format("log10", math_format(10^.x))) +
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+## Second plot for Dashboard, tab 2
+
+skimr::skim_without_charts(ghg_data)
+
+
+ghg_data %>% 
+  filter(is.na(per_capital) & is.na(per_capital)) %>% 
+  view()
 
 
 
