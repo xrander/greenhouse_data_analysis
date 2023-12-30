@@ -4,7 +4,7 @@ library("shinyWidgets")
 library("tidyverse")
 library("plotly")
 library("hrbrthemes")
-library("viridis")
+library("scales")
 library("janitor")
 
 setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/data")
@@ -45,8 +45,79 @@ ghg_pie <-ghg_data %>%
   mutate(gas2 = fct_collapse(gas,
                             "Others" = c("HFC", "MIX", "N2O", "NF3", "PFC", "SF6")))
 
+# Metrics needed for bubble chart
+un_population <- read_csv("/home/xrander/Documents/Data Science/Personal Project/ghg_data_analysis/data/population_data.csv",
+                          col_types = list("Country or Area" = col_character(),
+                                           "Year" = col_double(),
+                                           "Area" = col_character(),
+                                           "Sex" = col_character(),
+                                           "Record Type" = col_character(),
+                                           "Value" = col_double(),
+                                           "Value Footnotes" = col_double()
+                          )
+)
 
 
+un_population <- un_population %>%
+  select(`Country or Area`, Sex, Year, Area, Value) %>% 
+  filter(Sex == "Both Sexes" & Area == "Total") %>% 
+  select(c(1,3,5)) %>% 
+  rename("region" = "Country or Area",
+         "year" = "Year",
+         "population" = "Value")
+
+
+EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
+        "Estonia", "Finland", "France", "Germany", "Greece",
+        "Hungary", "Ireland", "Italy", "Latvia", "Lithuania",
+        "Luxembourg", "Malta", "Netherlands", "Poland", "Portugal", "Romania", "Slovakia", "Slovenia",
+        "Spain", "Sweden") # EU is not represented as a data point.
+#list will be created to include EU in the data point
+
+eu_pop <- un_population %>% 
+  filter(region %in% EU) %>% 
+  mutate(is_eu = "European Union") %>% 
+  group_by(year, is_eu) %>% 
+  summarize(population = sum(population)) %>% 
+  rename("region" = is_eu) %>% 
+  relocate(region)
+
+un_population <- un_population %>% 
+  bind_rows(eu_pop) %>% 
+  mutate(region = ifelse(region == "United Kingdom of Great Britain and Northern Ireland",
+                         "United Kingdom", region))
+
+# The same will be repeated for the GDP Per Capital
+
+un_per_capital <-read_csv("gdp.csv")
+
+eu_per_capital <- un_per_capital %>% 
+  filter(region %in% EU) %>% 
+  mutate(is_eu = "European Union") %>% 
+  group_by(year, is_eu) %>% 
+  summarize(per_capital = mean(gdp)) %>% 
+  rename("region" = is_eu) %>% 
+  relocate(region)
+
+un_per_capital <- un_per_capital %>% 
+  rename("per_capital" = gdp) %>% 
+  bind_rows(eu_per_capital) %>% 
+  mutate(region = case_when(region == "United States" ~ "United States of America",
+                            region == "United Kingdom of Great Britain and Northern Ireland" ~ "United Kingdom",
+                            region != "United States" ~ region))
+
+un_data <- un_population %>% 
+  left_join(un_per_capital, join_by(region, year))
+
+un_data <- un_data %>% 
+  group_by(region, year) %>% 
+  summarize(population = mean(population, na.rm = T),
+            per_capital = mean(per_capital, na.rm = T))
+
+un_data <- un_data[complete.cases(un_data), ]
+
+ghg_data <- ghg_data %>% 
+  left_join(un_data, join_by(region, year))
 
 ui <- ui <- dashboardPage(skin = "green",
                           dashboardHeader(title = "GHG Emission Explorer (1990 - 2020)",
@@ -123,7 +194,7 @@ ui <- ui <- dashboardPage(skin = "green",
                                          box(
                                            status = "warning",
                                            solidHeader = T,
-                                           plotlyOutput("emis_trend"),
+                                           plotlyOutput("line_plot"),
                                            width = 9
                                            )
                                          )
@@ -138,8 +209,9 @@ ui <- ui <- dashboardPage(skin = "green",
                               
                               fluidRow(
                                 box(
-                                  h6("Only a gas can be selected here, the goal of the chart is to show
-                                     how each gas compares across the various regions."),
+                                  h6("The plot on your right to show how each gas compares across the various regions.
+                                     Select a gas to begin 'Methane(CH4)' is chosen by default, click dropdown to make choice"),
+                                  hr(),
                                   collapsible = T,
                                   pickerInput("gas", "Select Gas",
                                               choices = unique(ghg_data$gas),
@@ -155,14 +227,25 @@ ui <- ui <- dashboardPage(skin = "green",
                                 box(
                                   title = "Regional Comparison of Gas Emission",
                                   width = 8,
-                                  plotlyOutput("comp_plot"),
+                                  plotlyOutput("line_plot_2"),
                                   collapsible = T)
                               ),
                               
                               fluidRow(
-                                #sliderTextInput(),
-                                #plotlyOutput()
-                              )
+                                box(
+                                  h6( "Emission of gases in relation to Population and Per Capital($) "),
+                                  pickerInput("gas2", "Select Gas",
+                                              choices = unique(ghg_data$gas),
+                                              options = list(style = "btn-warning")),
+                                  sliderTextInput("year_range_3", "Year",
+                                                  choices = sort(unique(ghg_data$year)),
+                                                  selected = 1990,
+                                                  animate = T),
+                                  
+                                  width = 4),
+                                
+                                box(plotlyOutput("bubble_plot"))
+                                )
                               ),
                             tabItem(
                               tabName = "scenario",
@@ -231,7 +314,7 @@ server <- function(input, output) {
 
   })
   
-  output$emis_trend <- renderPlotly({
+  output$line_plot <- renderPlotly({
     emis_plot <- ghg_data %>% 
       filter(between(year, min(input$year_range), max(input$year_range))) %>%
       group_by(year, gas) %>% 
@@ -249,7 +332,7 @@ server <- function(input, output) {
     ggplotly(emis_plot)
   })
   
-  output$comp_plot <- renderPlotly({
+  output$line_plot_2 <- renderPlotly({
     comp_plot <- ghg_data %>% 
       filter(gas == input$gas & between(year, min(input$year_range_2), max(input$year_range_2))) %>% 
       ggplot(aes(year, emission_value, col = region)) +
@@ -261,6 +344,19 @@ server <- function(input, output) {
       scale_y_comma()
     
     ggplotly(comp_plot)
+  })
+  
+  output$bubble_plot <- renderPlotly({
+    ghg_data %>% 
+      filter(year == input$year_range_3 & gas == input$gas2) %>% 
+      ggplot(aes(population, emission_value, size = per_capital * 100)) +
+      geom_point(aes(col = region),
+                 show.legend = F) +
+      theme_tinyhand()+
+      scale_x_log10() +
+      scale_y_log10() +
+      labs(x = "Population (log 10)",
+           y = "Emission in KTCO2e (log 10)")
   })
   
   }

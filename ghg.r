@@ -198,8 +198,6 @@ ghg_data %>%
                 labels = trans_format("log10", math_format(10^.x)))
 ## Second plot for Dashboard, tab 2
 
-skimr::skim_without_charts(ghg_data)
-
 
 ghg_data %>% 
   filter(is.na(per_capital) & is.na(per_capital)) %>% 
