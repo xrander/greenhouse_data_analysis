@@ -1,5 +1,5 @@
 # Set work directory
-setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/")
+setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/data")
 
 # 
 library("tidyverse")
@@ -11,7 +11,7 @@ library("janitor")
 files <- list.files(pattern = "\\.csv$", full.names = T)
 
 # files
-files <- files[-c(1,2)] # previously saved csv files from when script was original developed are removed.
+files <- files[-c(3,11)] # previously saved csv files from when script was original developed are removed.
 # uncomment and run 'files' first before running this code.
 
 
@@ -121,7 +121,6 @@ un_population <- read_csv("population_data.csv",
 )
 
 
-
 un_population <- un_population %>%
   select(`Country or Area`, Sex, Year, Area, Value) %>% 
   filter(Sex == "Both Sexes" & Area == "Total") %>% 
@@ -131,7 +130,56 @@ un_population <- un_population %>%
          "population" = "Value")
 
 
+EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
+        "Estonia", "Finland", "France", "Germany", "Greece",
+        "Hungary", "Ireland", "Italy", "Latvia", "Lithuania",
+        "Luxembourg", "Malta", "Netherlands", "Poland", "Portugal", "Romania", "Slovakia", "Slovenia",
+        "Spain", "Sweden") # EU is not represented as a data point.
+                          #list will be created to include EU in the data point
 
+
+eu_pop <- un_population %>% 
+  filter(region %in% EU) %>% 
+  mutate(is_eu = "European Union") %>% 
+  group_by(year, is_eu) %>% 
+  summarize(population = sum(population)) %>% 
+  rename("region" = is_eu) %>% 
+  relocate(region)
+
+un_population <- un_population %>% 
+  bind_rows(eu_pop)
+
+# The same will be repeated for the GDP Per Capital
+
+un_per_capital <-read_csv("gdp.csv")
+
+eu_per_capital <- un_per_capital %>% 
+  filter(region %in% EU) %>% 
+  mutate(is_eu = "European Union") %>% 
+  group_by(year, is_eu) %>% 
+  summarize(per_capital = mean(gdp)) %>% 
+  rename("region" = is_eu) %>% 
+  relocate(region)
+
+un_per_capital <- un_per_capital %>% 
+  rename("per_capital" = gdp) %>% 
+  bind_rows(eu_per_capital)
+
+un_population %>% 
+  left_join(un_per_capital, join_by(region, year))
+
+
+
+
+ghg_data %>% 
+  select(region, gas) %>% 
+  group_by(gas) %>% 
+  summarize(total = n(region))
+
+
+
+ghg_data %>% 
+  left_join(un_population, join_by(region, year))
 
 ghg_data_long <- ghg_data %>%
   group_by(series_code, country_or_area) %>% 
@@ -376,3 +424,67 @@ server <- function(input, output) {
 }
 # Run the application 
 shinyApp(ui = ui, server = server)
+
+
+#############################################################
+# Population data needed for Comparison plot
+un_population <- read_csv("population_data.csv",
+                          col_types = list("Country or Area" = col_character(),
+                                           "Year" = col_double(),
+                                           "Area" = col_character(),
+                                           "Sex" = col_character(),
+                                           "Record Type" = col_character(),
+                                           "Value" = col_double(),
+                                           "Value Footnotes" = col_double()
+                          )
+)
+
+
+un_population <- un_population %>%
+  select(`Country or Area`, Sex, Year, Area, Value) %>% 
+  filter(Sex == "Both Sexes" & Area == "Total") %>% 
+  select(c(1,3,5)) %>% 
+  rename("region" = "Country or Area",
+         "year" = "Year",
+         "population" = "Value")
+
+
+EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
+        "Estonia", "Finland", "France", "Germany", "Greece",
+        "Hungary", "Ireland", "Italy", "Latvia", "Lithuania",
+        "Luxembourg", "Malta", "Netherlands", "Poland", "Portugal", "Romania", "Slovakia", "Slovenia",
+        "Spain", "Sweden") # EU is not represented as a data point.
+#list will be created to include EU in the data point
+
+
+eu_pop <- un_population %>% 
+  filter(region %in% EU) %>% 
+  mutate(is_eu = "European Union") %>% 
+  group_by(year, is_eu) %>% 
+  summarize(population = sum(population)) %>% 
+  rename("region" = is_eu) %>% 
+  relocate(region)
+
+un_population <- un_population %>% 
+  bind_rows(eu_pop)
+
+# GDP data needed for comparison
+
+# The same will be repeated for the GDP Per Capital
+
+un_per_capital <-read_csv("gdp.csv")
+
+eu_per_capital <- un_per_capital %>% 
+  filter(region %in% EU) %>% 
+  mutate(is_eu = "European Union") %>% 
+  group_by(year, is_eu) %>% 
+  summarize(per_capital = mean(gdp)) %>% 
+  rename("region" = is_eu) %>% 
+  relocate(region)
+
+un_per_capital <- un_per_capital %>% 
+  rename("per_capital" = gdp) %>% 
+  bind_rows(eu_per_capital)
+
+un_population %>% 
+  left_join(un_per_capital, join_by(region, year))

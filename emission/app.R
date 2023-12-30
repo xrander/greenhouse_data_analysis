@@ -7,13 +7,13 @@ library("hrbrthemes")
 library("viridis")
 library("janitor")
 
-setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/")
+setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/data")
 
 
 files <- list.files(pattern = "\\.csv$", full.names = T)
 
 # files
-files <- files[-c(1,2)] # previously saved csv files from when script was original developed are removed.
+files <- files[-c(3, 11)] # previously saved csv files from when script was original developed are removed.
 # uncomment and run 'files' first before running this code.
 
 
@@ -44,6 +44,9 @@ format_large_number <- function(x) {
 ghg_pie <-ghg_data %>%
   mutate(gas2 = fct_collapse(gas,
                             "Others" = c("HFC", "MIX", "N2O", "NF3", "PFC", "SF6")))
+
+
+
 
 ui <- ui <- dashboardPage(skin = "green",
                           dashboardHeader(title = "GHG Emission Explorer (1990 - 2020)",
@@ -111,14 +114,18 @@ ui <- ui <- dashboardPage(skin = "green",
                                            background = "green",
                                            sliderTextInput("year_range", "Choose year range",
                                                            choices = sort(unique(ghg_data$year)),
-                                                           selected = c(1990, 2010),
-                                                           grid = T),
-                                         ),
+                                                           selected = c(1990, 2000),
+                                                           from_min = 1990,
+                                                           from_max = 2005,
+                                                           to_min = 2010,
+                                                           to_max = 2020)
+                                           ),
                                          box(
                                            status = "warning",
                                            solidHeader = T,
                                            plotlyOutput("emis_trend"),
-                                           width = 9)
+                                           width = 9
+                                           )
                                          )
                                   )
                                 
@@ -131,9 +138,9 @@ ui <- ui <- dashboardPage(skin = "green",
                               
                               fluidRow(
                                 box(
-                                  title = "Regional Comparison of GHG Emission",
                                   h6("Only a gas can be selected here, the goal of the chart is to show
                                      how each gas compares across the various regions."),
+                                  collapsible = T,
                                   pickerInput("gas", "Select Gas",
                                               choices = unique(ghg_data$gas),
                                               options = list(style = "btn-warning")),
@@ -143,9 +150,18 @@ ui <- ui <- dashboardPage(skin = "green",
                                                   from_min = 1990,
                                                   from_max = 2000,
                                                   to_min = 2010,
-                                                  to_max = 2020)
-                                  ),
-                                box(plotlyOutput("comp_plot"))
+                                                  to_max = 2020),
+                                  width = 4),
+                                box(
+                                  title = "Regional Comparison of Gas Emission",
+                                  width = 8,
+                                  plotlyOutput("comp_plot"),
+                                  collapsible = T)
+                              ),
+                              
+                              fluidRow(
+                                #sliderTextInput(),
+                                #plotlyOutput()
                               )
                               ),
                             tabItem(
@@ -236,11 +252,17 @@ server <- function(input, output) {
   output$comp_plot <- renderPlotly({
     comp_plot <- ghg_data %>% 
       filter(gas == input$gas & between(year, min(input$year_range_2), max(input$year_range_2))) %>% 
-      ggplot(aes(year, emission_value, col = region))+
-      geom_line()
+      ggplot(aes(year, emission_value, col = region)) +
+      geom_line() +
+      theme_tinyhand()+
+      labs(x = "Year",
+           y = "Emission (KTCO2e)",
+           title = paste0("Emission of ", input$gas, " From ", min(input$year_range_2), " to ", max(input$year_range_2))) +
+      scale_y_comma()
     
     ggplotly(comp_plot)
   })
+  
   }
 
 shinyApp(ui, server)
