@@ -1,15 +1,42 @@
-# Set work directory
-setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/data")
-
-# 
+# Load libraries
 library("tidyverse")
 library("plotly")
 library("hrbrthemes")
 library("viridis")
 library("janitor")
 library("scales")
+library("httr")
+library("jsonlite")
 
 
+base_url <- "https://data.un.org/ws/rest/data/UNSD,DF_UNData_UNFCC,1.0/.EN_ATM_METH_XLULUCF+EN_ATM_CO2E_XLULUCF+EN_CLC_GHGE_XLULUCF+EN_ATM_HFCE+EN_ATM_NO2E_XLULUCF+EN_ATM_PFCE+EN_ATM_SF6E.AUS+AUT+BLR+BEL+BGR+CAN+HRV+CYP+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ITA+JPN+LVA+LIE+LTU+LUX+MLT+MCO+NLD+NZL+NOR+POL+PRT+ROU+RUS+SVK+SVN+ESP+SWE+CHE+TUR+UKR+GBR+USA+EU1./ALL/?detail=full&dimensionAtObservation=TIME_PERIOD"
+# Connecting to API to support auto updates
+
+res <- GET(base_url,
+           add_headers(""),
+           accept("text/csv"))
+
+content <- content(res, type = "text", encoding = "utf-8")
+
+ghg_data <- read_csv(content, col_types = cols()) %>% 
+  clean_names()
+
+gas_formula <- tibble(indicator = unique(ghg_data$indicator),
+                      gas = c("CO2", "HFC", "CH4", "NO2", "PFC", "SF6", "GHG"))
+
+ghg_data <- ghg_data %>% 
+  left_join(gas_formula, join_by(indicator)) %>% 
+  relocate(ref_area, gas) %>% 
+  left_join(countrycode::codelist %>% select(country.name.en, genc3c),
+            join_by("ref_area" == "genc3c")) %>% 
+  relocate(country.name.en) %>% 
+  rename("region" = country.name.en,
+         "year" = time_period,
+         "emission_value" = obs_value) %>% 
+  select(c(1, 3, 8, 9)) %>% 
+  mutate(region = ifelse(is.na(region), "European Union", region)) %>% 
+  mutate_if(is_character, factor)
+  
 
 files <- list.files(pattern = "\\.csv$", full.names = T)
 
@@ -65,7 +92,7 @@ format_large_number <- function(x) {
 }
 
 ghg_data %>% 
-  filter(year %in% c(1990:2000) & gas == c("MIX", "CH4")) %>% 
+  filter(year %in% c(1990:2000) & gas == c("CO2", "CH4")) %>% 
   group_by(gas) %>% 
   summarize(total_emission = sum(emission_value)) %>% 
   pull(total_emission) %>% 
@@ -76,8 +103,6 @@ ghg_data %>%
   
 ghg_data %>%
   filter(year == 2020) %>% # to be filtered by year
-  mutate(gas = fct_collapse(gas,
-                            "Others" = c("HFC", "MIX", "N2O", "NF3", "PFC", "SF6"))) %>% 
   group_by(gas) %>%
   summarize(emission = sum(emission_value)) %>%
   mutate(gas_proportion = round(emission/sum(emission) * 100, 1),
@@ -112,7 +137,7 @@ ghg_data %>%
   ggplot(aes(year, emis, group = gas, col = gas))+
   geom_line()
 
-un_population <- read_csv("/home/xrander/Documents/Data Science/Personal Project/ghg_data_analysis/data/population_data.csv",
+un_population <- read_csv("population_data.csv",
                           col_types = list("Country or Area" = col_character(),
                                            "Year" = col_double(),
                                            "Area" = col_character(),
@@ -133,7 +158,7 @@ un_population <- un_population %>%
          "population" = "Value")
 
 
-EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
+eu_countries <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
         "Estonia", "Finland", "France", "Germany", "Greece",
         "Hungary", "Ireland", "Italy", "Latvia", "Lithuania",
         "Luxembourg", "Malta", "Netherlands", "Poland", "Portugal", "Romania", "Slovakia", "Slovenia",
@@ -141,7 +166,7 @@ EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denma
                           #list will be created to include EU in the data point
 
 eu_pop <- un_population %>% 
-  filter(region %in% EU) %>% 
+  filter(region %in% eu_countries) %>% 
   mutate(is_eu = "European Union") %>% 
   group_by(year, is_eu) %>% 
   summarize(population = sum(population)) %>% 
@@ -158,7 +183,7 @@ un_population <- un_population %>%
 un_per_capital <-read_csv("gdp.csv")
 
 eu_per_capital <- un_per_capital %>% 
-  filter(region %in% EU) %>% 
+  filter(region %in% eu_countries) %>% 
   mutate(is_eu = "European Union") %>% 
   group_by(year, is_eu) %>% 
   summarize(per_capital = mean(gdp)) %>% 
@@ -199,15 +224,24 @@ ghg_data %>%
 ## Second plot for Dashboard, tab 2
 
 
-ghg_data %>% 
-  filter(is.na(per_capital) & is.na(per_capital)) %>% 
-  view()
-
 
 
 ghg_data %>% 
   left_join(un_population, join_by(region, year))
 
+
+ghg_data <- ghg_data %>% 
+  group_by(gas, region) %>% 
+  mutate(cummulative_emission = cumsum(emission_value))
+
+ghg_data <- ghg_data[complete.cases(ghg_data),]
+
+
+
+ghg_data  %>% 
+
+
+######################################
 ghg_data_long <- ghg_data %>%
   group_by(series_code, country_or_area) %>% 
   arrange(country_or_area, wt = year,

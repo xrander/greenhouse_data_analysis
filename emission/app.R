@@ -7,46 +7,52 @@ library("hrbrthemes")
 library("scales")
 library("janitor")
 
-setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/data")
 
+base_url <- "https://data.un.org/ws/rest/data/UNSD,DF_UNData_UNFCC,1.0/.EN_ATM_METH_XLULUCF+EN_ATM_CO2E_XLULUCF+EN_CLC_GHGE_XLULUCF+EN_ATM_HFCE+EN_ATM_NO2E_XLULUCF+EN_ATM_PFCE+EN_ATM_SF6E.AUS+AUT+BLR+BEL+BGR+CAN+HRV+CYP+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ITA+JPN+LVA+LIE+LTU+LUX+MLT+MCO+NLD+NZL+NOR+POL+PRT+ROU+RUS+SVK+SVN+ESP+SWE+CHE+TUR+UKR+GBR+USA+EU1./ALL/?detail=full&dimensionAtObservation=TIME_PERIOD"
+# Connecting to API to support auto updates
 
-files <- list.files(pattern = "\\.csv$", full.names = T)
+res <- GET(base_url,
+           add_headers(""),
+           accept("text/csv"))
 
-# files
-files <- files[-c(3, 11)] # previously saved csv files from when script was original developed are removed.
-# uncomment and run 'files' first before running this code.
+content <- content(res, type = "text", encoding = "utf-8")
 
+ghg_data <- read_csv(content, col_types = cols()) %>% 
+  clean_names()
 
+gas_formula <- tibble(indicator = unique(ghg_data$indicator),
+                      gas = c("CO2", "HFC", "CH4", "NO2", "PFC", "SF6", "GHG"))
 
-ghg_data <- map_df(files, read_csv) %>% 
-  clean_names() %>% 
-  select(-2) %>% 
-  rename("gas" = series_code,
-         "region" = country_or_area,
-         "emission_value" = value) %>%
-  mutate_if(is.character, factor)
+ghg_data <- ghg_data %>% 
+  left_join(gas_formula, join_by(indicator)) %>% 
+  relocate(ref_area, gas) %>% 
+  left_join(countrycode::codelist %>% select(country.name.en, genc3c),
+            join_by("ref_area" == "genc3c")) %>% 
+  relocate(country.name.en) %>% 
+  rename("region" = country.name.en,
+         "year" = time_period,
+         "emission_value" = obs_value) %>% 
+  select(c(1, 3, 8, 9)) %>% 
+  mutate(region = ifelse(is.na(region), "European Union", region)) %>% 
+  mutate_if(is_character, factor)
 
 
 format_large_number <- function(x) {
   if(x >= 1e12) {
     return(paste(format(round(x/1e12), nsmall = 1), " Trillion"))
-  } else if (x >=1e9) {
-    return(paste(format(round(x/1e9), nsmall = 1), "Billion"))
-  } else if (x >=1e6) {
-    return(paste(format(round(x/1e6), nsmall = 1), "Million"))
-  } else if (x >=1e3) {
-    return(paste(format(round(x/1e3), nsmall = 1), "Thousand"))
-  } else {
-    return(as.character(x))
-  }
-} # output needed to be in readable format and not long numbers
-
-ghg_pie <-ghg_data %>%
-  mutate(gas2 = fct_collapse(gas,
-                            "Others" = c("HFC", "MIX", "N2O", "NF3", "PFC", "SF6")))
+    } else if (x >=1e9) {
+      return(paste(format(round(x/1e9), nsmall = 1), "Billion"))
+      } else if (x >=1e6) {
+        return(paste(format(round(x/1e6), nsmall = 1), "Million"))
+        } else if (x >=1e3) {
+          return(paste(format(round(x/1e3), nsmall = 1), "Thousand"))
+          } else {
+            return(as.character(x))
+            }
+  } # output needed to be in readable format and not long numbers
 
 # Metrics needed for bubble chart
-un_population <- read_csv("/home/xrander/Documents/Data Science/Personal Project/ghg_data_analysis/data/population_data.csv",
+un_population <- read_csv("https://raw.githubusercontent.com/xrander/greenhouse_data_analysis/master/data/population_data.csv",
                           col_types = list("Country or Area" = col_character(),
                                            "Year" = col_double(),
                                            "Area" = col_character(),
@@ -67,7 +73,7 @@ un_population <- un_population %>%
          "population" = "Value")
 
 
-EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
+european_countries <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
         "Estonia", "Finland", "France", "Germany", "Greece",
         "Hungary", "Ireland", "Italy", "Latvia", "Lithuania",
         "Luxembourg", "Malta", "Netherlands", "Poland", "Portugal", "Romania", "Slovakia", "Slovenia",
@@ -75,7 +81,7 @@ EU <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denma
 #list will be created to include EU in the data point
 
 eu_pop <- un_population %>% 
-  filter(region %in% EU) %>% 
+  filter(region %in% european_countries) %>% 
   mutate(is_eu = "European Union") %>% 
   group_by(year, is_eu) %>% 
   summarize(population = sum(population)) %>% 
@@ -89,10 +95,10 @@ un_population <- un_population %>%
 
 # The same will be repeated for the GDP Per Capital
 
-un_per_capital <-read_csv("gdp.csv")
+un_per_capital <-read_csv("https://raw.githubusercontent.com/xrander/greenhouse_data_analysis/master/data/gdp.csv")
 
 eu_per_capital <- un_per_capital %>% 
-  filter(region %in% EU) %>% 
+  filter(region %in% european_countries) %>% 
   mutate(is_eu = "European Union") %>% 
   group_by(year, is_eu) %>% 
   summarize(per_capital = mean(gdp)) %>% 
@@ -118,6 +124,11 @@ un_data <- un_data[complete.cases(un_data), ]
 
 ghg_data <- ghg_data %>% 
   left_join(un_data, join_by(region, year))
+
+
+ghg_data <- ghg_data %>% 
+  group_by(gas, region) %>% 
+  mutate(cummulative_emission = cumsum(emission_value))
 
 ui <- ui <- dashboardPage(skin = "green",
                           dashboardHeader(title = "GHG Emission Explorer (1990 - 2020)",
@@ -223,6 +234,10 @@ ui <- ui <- dashboardPage(skin = "green",
                                                   from_max = 2000,
                                                   to_min = 2010,
                                                   to_max = 2020),
+                                  switchInput("area_plot",
+                                              "Area Plot ON/OFF",
+                                              onStatus = "success",
+                                              offStatus = "danger"),
                                   width = 4),
                                 box(
                                   title = "Regional Comparison of Gas Emission",
@@ -233,15 +248,18 @@ ui <- ui <- dashboardPage(skin = "green",
                               
                               fluidRow(
                                 box(
-                                  h6( "Emission of gases in relation to Population and Per Capital($) "),
+                                  h3( "Emission of gases in relation to Population and Per Capital($) "),
                                   pickerInput("gas2", "Select Gas",
                                               choices = unique(ghg_data$gas),
                                               options = list(style = "btn-warning")),
+                                  h4("Toggle to Select Yearly Emission or Cummulative Emission"),
+                                  prettySwitch("cumsum", "toggle emission",
+                                               status = "warning",
+                                               slim = T),
                                   sliderTextInput("year_range_3", "Year",
                                                   choices = sort(unique(ghg_data$year)),
                                                   selected = 1990,
                                                   animate = T),
-                                  
                                   width = 4),
                                 
                                 box(plotlyOutput("bubble_plot"))
@@ -301,13 +319,13 @@ server <- function(input, output) {
   })
   
   output$piechart <- renderPlotly({
-    ghg_pie %>%
+    ghg_data %>%
       filter(year %in% input$single_year) %>% 
-      group_by(gas2) %>%
+      group_by(gas) %>%
       summarize(total_emission = sum(emission_value)) %>%
       mutate(gas_proportion = round(total_emission/sum(total_emission) * 100, 1),
              ylab_pos = cumsum(gas_proportion + 1) - 0.5 * gas_proportion) %>% 
-      plot_ly(labels = ~gas2, values = ~gas_proportion, type = "pie",
+      plot_ly(labels = ~gas, values = ~gas_proportion, type = "pie",
               textposition = "inside",
               textinfo = "label+percent",
               showlegend = F)
@@ -333,29 +351,61 @@ server <- function(input, output) {
   })
   
   output$line_plot_2 <- renderPlotly({
-    comp_plot <- ghg_data %>% 
-      filter(gas == input$gas & between(year, min(input$year_range_2), max(input$year_range_2))) %>% 
-      ggplot(aes(year, emission_value, col = region)) +
-      geom_line() +
-      theme_tinyhand()+
+    plot_object <- reactive({
+      ghg_data %>% 
+        mutate() %>% # collapse countries here
+        filter(gas == input$gas & 
+                 between(year, min(input$year_range_2),
+                         max(input$year_range_2))
+               )
+      })
+    
+    comp_plot <- ggplot(plot_object(),
+                        aes(year,
+                            emission_value)
+                        ) +
+      theme_tinyhand() +
       labs(x = "Year",
            y = "Emission (KTCO2e)",
-           title = paste0("Emission of ", input$gas, " From ", min(input$year_range_2), " to ", max(input$year_range_2))) +
+           title = paste0("Emission of ",
+                          input$gas,
+                          " From ",
+                          min(input$year_range_2), 
+                          " to ", 
+                          max(input$year_range_2))) +
       scale_y_comma()
+    
+    if(input$area_plot == FALSE) comp_plot <- comp_plot + 
+        geom_line(aes(col = region))
+    
+    if(input$area_plot == TRUE) comp_plot <- comp_plot + 
+        geom_area(aes(fill = region),
+                  alpha = 0.7)+
+        scale_fill_discrete()
     
     ggplotly(comp_plot)
   })
   
   output$bubble_plot <- renderPlotly({
-    ghg_data %>% 
+    bub_plot <- 
+      ghg_data %>% 
       filter(year == input$year_range_3 & gas == input$gas2) %>% 
-      ggplot(aes(population, per_capital, size = emission_value), show.legend = F) +
-      geom_point(aes(col = region)) +
+      ggplot(aes(population, per_capital, col = region, alpha = 0.7)) +
       theme_tinyhand()+
       scale_x_log10() +
       scale_y_log10() +
       labs(x = "Population (log 10)",
            y = "GDP Per Capital in USD (log 10)")
+      theme(legend.position = "none")
+    
+    if(input$cumsum == TRUE) bub_plot <- bub_plot + 
+        geom_point(aes(size = cummulative_emission))
+    if(input$cumsum == FALSE) bub_plot <- bub_plot +
+        geom_point(aes(size = emission_value))
+  
+    
+    ggplotly(bub_plot)
+      
   })
   
   }
