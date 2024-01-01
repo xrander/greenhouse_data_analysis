@@ -349,14 +349,13 @@ server <- function(input, output) {
   output$bubble_plot <- renderPlotly({
     ghg_data %>% 
       filter(year == input$year_range_3 & gas == input$gas2) %>% 
-      ggplot(aes(population, emission_value, size = per_capital * 100)) +
-      geom_point(aes(col = region),
-                 show.legend = F) +
+      ggplot(aes(population, per_capital, size = emission_value), show.legend = F) +
+      geom_point(aes(col = region)) +
       theme_tinyhand()+
       scale_x_log10() +
       scale_y_log10() +
       labs(x = "Population (log 10)",
-           y = "Emission in KTCO2e (log 10)")
+           y = "GDP Per Capital in USD (log 10)")
   })
   
   }
