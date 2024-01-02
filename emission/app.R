@@ -262,7 +262,8 @@ ui <- ui <- dashboardPage(skin = "green",
                                                   animate = T),
                                   width = 4),
                                 
-                                box(plotlyOutput("bubble_plot"))
+                                box(plotlyOutput("bubble_plot"),
+                                    width = 8)
                                 )
                               ),
                             tabItem(
@@ -353,7 +354,16 @@ server <- function(input, output) {
   output$line_plot_2 <- renderPlotly({
     plot_object <- reactive({
       ghg_data %>% 
-        mutate() %>% # collapse countries here
+        mutate(region = fct_collapse(region,
+                                     "Others" = c(#"Turkey", "Netherlands","Romania", 
+                                       "Belarus", "Greece",#"Czechia", "Belgium",
+                                       "Bulgaria", "Hungary", "Denmark",
+                                       "Austria",  "Portugal", "Finland",
+                                       "New Zealand", "Sweden", "Slovakia", 
+                                       "Ireland", "Norway", "Switzerland", 
+                                       "Lithuania", "Estonia", "Croatia",
+                                       "Latvia", "Slovenia", "Luxembourg",
+                                       "Cyprus", "Iceland", "Malta", "Liechtenstein", "Monaco"))) %>% 
         filter(gas == input$gas & 
                  between(year, min(input$year_range_2),
                          max(input$year_range_2))
@@ -379,10 +389,10 @@ server <- function(input, output) {
         geom_line(aes(col = region))
     
     if(input$area_plot == TRUE) comp_plot <- comp_plot + 
-        geom_area(aes(fill = region),
-                  alpha = 0.7)+
-        scale_fill_discrete()
-    
+      geom_area(aes(fill = region),
+                alpha = 0.3)+
+      scale_fill_ipsum()
+      
     ggplotly(comp_plot)
   })
   
