@@ -1,11 +1,16 @@
+setwd("~/Documents/Data Science/Personal Project/ghg_data_analysis/")
+
 library("shiny")
 library("shinydashboard")
 library("shinyWidgets")
 library("tidyverse")
 library("plotly")
 library("hrbrthemes")
+library(gganimate)
 library("scales")
 library("janitor")
+library("httr")
+library("jsonlite")
 
 
 base_url <- "https://data.un.org/ws/rest/data/UNSD,DF_UNData_UNFCC,1.0/.EN_ATM_METH_XLULUCF+EN_ATM_CO2E_XLULUCF+EN_CLC_GHGE_XLULUCF+EN_ATM_HFCE+EN_ATM_NO2E_XLULUCF+EN_ATM_PFCE+EN_ATM_SF6E.AUS+AUT+BLR+BEL+BGR+CAN+HRV+CYP+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ITA+JPN+LVA+LIE+LTU+LUX+MLT+MCO+NLD+NZL+NOR+POL+PRT+ROU+RUS+SVK+SVN+ESP+SWE+CHE+TUR+UKR+GBR+USA+EU1./ALL/?detail=full&dimensionAtObservation=TIME_PERIOD"
@@ -33,7 +38,8 @@ ghg_data <- ghg_data %>%
          "year" = time_period,
          "emission_value" = obs_value) %>% 
   select(c(1, 3, 8, 9)) %>% 
-  mutate(region = ifelse(is.na(region), "European Union", region)) %>% 
+  mutate(region = ifelse(is.na(region), "European Union", region),
+         year = as.integer(year)) %>% 
   mutate_if(is_character, factor)
 
 
@@ -60,8 +66,8 @@ un_population <- read_csv("https://raw.githubusercontent.com/xrander/greenhouse_
                                            "Record Type" = col_character(),
                                            "Value" = col_double(),
                                            "Value Footnotes" = col_double()
+                                           )
                           )
-)
 
 
 un_population <- un_population %>%
@@ -177,8 +183,7 @@ ui <- ui <- dashboardPage(skin = "green",
                                     collapsible = T,
                                     plotOutput("top_emitting_countries")
                                   ), 
-                                  
-                                  
+                                
                                   box(
                                     width = 4,
                                     title = "Proportion of Gas Emission",
@@ -220,13 +225,14 @@ ui <- ui <- dashboardPage(skin = "green",
                               
                               fluidRow(
                                 box(
-                                  h6("The plot on your right to show how each gas compares across the various regions.
+                                  h6("Plot on the right shows how gasas compares across overtime.
                                      Select a gas to begin 'Methane(CH4)' is chosen by default, click dropdown to make choice"),
+                              
                                   hr(),
                                   collapsible = T,
-                                  pickerInput("gas", "Select Gas",
-                                              choices = unique(ghg_data$gas),
-                                              options = list(style = "btn-warning")),
+                                  prettySwitch("log10", "Log 10 transformation",
+                                               status = "success",
+                                               slim = T),
                                   sliderTextInput("year_range_2", " Select Time Span",
                                                   choices = sort(unique(ghg_data$year)),
                                                   selected = c(1990, 2005),
@@ -234,16 +240,13 @@ ui <- ui <- dashboardPage(skin = "green",
                                                   from_max = 2000,
                                                   to_min = 2010,
                                                   to_max = 2020),
-                                  switchInput("area_plot",
-                                              "Area Plot ON/OFF",
-                                              onStatus = "success",
-                                              offStatus = "danger"),
-                                  width = 4),
+                                  width = 2),
                                 box(
                                   title = "Regional Comparison of Gas Emission",
-                                  width = 8,
-                                  plotlyOutput("line_plot_2"),
-                                  collapsible = T)
+                                  width = 4,
+                                  plotOutput("line_plot_2"),
+                                  collapsible = T),
+                                box()
                               ),
                               
                               fluidRow(
@@ -256,13 +259,9 @@ ui <- ui <- dashboardPage(skin = "green",
                                   prettySwitch("cumsum", "toggle emission",
                                                status = "warning",
                                                slim = T),
-                                  sliderTextInput("year_range_3", "Year",
-                                                  choices = sort(unique(ghg_data$year)),
-                                                  selected = 1990,
-                                                  animate = T),
                                   width = 4),
                                 
-                                box(plotlyOutput("bubble_plot"))
+                                box(plotOutput("animated_bar_plot"))
                                 )
                               ),
                             tabItem(
@@ -353,58 +352,71 @@ server <- function(input, output) {
   output$line_plot_2 <- renderPlotly({
     plot_object <- reactive({
       ghg_data %>% 
-        mutate() %>% # collapse countries here
-        filter(gas == input$gas & 
-                 between(year, min(input$year_range_2),
-                         max(input$year_range_2))
-               )
+        filter(between(year, min(input$year_range_2), max(input$year_range_2))) %>% 
+        group_by(gas, year) %>% 
+        summarize(emission_value = sum(emission_value))
       })
     
-    comp_plot <- ggplot(plot_object(),
-                        aes(year,
-                            emission_value)
-                        ) +
-      theme_tinyhand() +
-      labs(x = "Year",
-           y = "Emission (KTCO2e)",
-           title = paste0("Emission of ",
-                          input$gas,
-                          " From ",
-                          min(input$year_range_2), 
-                          " to ", 
-                          max(input$year_range_2))) +
-      scale_y_comma()
+    if (input$log10 == FALSE) {
+      return(
+        ggplot(plot_object(), aes(year, emission_value)) +
+          geom_line(aes(col = gas)) +
+          theme_tinyhand() +
+          labs(x = "Year",
+               y = "Emission (GgCO2e)",
+               title = paste0("Emission Trend from ", min(input$year_range_2), " to ", max(input$year_range_2))) +
+          scale_y_comma()
+      )} else {
+          return(
+            ggplot(plot_object(), aes(year, emission_value)) +
+              geom_line(aes(col = gas)) +
+              theme_tinyhand() +
+              labs(x = "Year",
+                   y = "Emission (GgCO2e) - Log Transformed",
+                   title = paste0("Emission Trend from ", min(input$year_range_2), " to ", max(input$year_range_2))) +
+              scale_y_log10()
+          )}
     
-    if(input$area_plot == FALSE) comp_plot <- comp_plot + 
-        geom_line(aes(col = region))
-    
-    if(input$area_plot == TRUE) comp_plot <- comp_plot + 
-        geom_area(aes(fill = region),
-                  alpha = 0.7)+
-        scale_fill_discrete()
-    
-    ggplotly(comp_plot)
   })
   
-  output$bubble_plot <- renderPlotly({
-    bub_plot <- 
-      ghg_data %>% 
-      filter(year == input$year_range_3 & gas == input$gas2) %>% 
-      ggplot(aes(population, per_capital, col = region, alpha = 0.7)) +
-      theme_tinyhand()+
-      scale_x_log10() +
-      scale_y_log10() +
-      labs(x = "Population (log 10)",
-           y = "GDP Per Capital in USD (log 10)")
-      theme(legend.position = "none")
-    
-    if(input$cumsum == TRUE) bub_plot <- bub_plot + 
-        geom_point(aes(size = cummulative_emission))
-    if(input$cumsum == FALSE) bub_plot <- bub_plot +
-        geom_point(aes(size = emission_value))
   
+  
+  output$animated_bar_plot <- renderPlot({
+    ghg_data %>% 
+      filter(gas == input$gas2) %>% 
+      if (input$cumsum == TRUE) {
+        return(
+          ggplot(aes(fct_reorder(region, cummulative_emission),
+                     cummulative_emission,
+                     fill = emission_value)) +
+            geom_bar(stat = "identity")+
+            scale_y_continuous(labels = comma) +
+            scale_fill_viridis_c(direction = -1) +
+            coord_flip() +
+            transition_time(as.integer(year)) +
+            labs(title = "Year: {frame_time}",
+                 x = "Region",
+                 y = "Emission in GgCO2e" ) +
+            view_follow() +
+            ease_aes("cubic-in")
+      )}
     
-    ggplotly(bub_plot)
+      else {
+        return(
+          ggplot(aes(fct_reorder(region, emission_value),
+                     emission_value,
+                     fill = emission_value)) +
+            geom_bar(stat = "identity")+
+            scale_y_continuous(labels = comma) +
+            scale_fill_viridis_c(direction = -1) +
+            coord_flip() +
+            transition_time(as.integer(year)) +
+            labs(title = "Year: {frame_time}",
+                 x = "Region",
+                 y = "Emission in GgCO2e" ) +
+            view_follow() +
+            ease_aes("cubic-in")
+          )}
       
   })
   
