@@ -4,9 +4,9 @@ library("shiny")
 library("shinydashboard")
 library("shinyWidgets")
 library("tidyverse")
+library("ggridges")
 library("plotly")
 library("hrbrthemes")
-library(gganimate)
 library("scales")
 library("janitor")
 library("httr")
@@ -134,7 +134,9 @@ ghg_data <- ghg_data %>%
 
 ghg_data <- ghg_data %>% 
   group_by(gas, region) %>% 
-  mutate(cummulative_emission = cumsum(emission_value))
+  mutate(cummulative_emission = cumsum(emission_value),
+         year = as.integer(year)) %>% 
+  ungroup()
 
 ui <- ui <- dashboardPage(skin = "green",
                           dashboardHeader(title = "GHG Emission Explorer (1990 - 2020)",
@@ -229,45 +231,46 @@ ui <- ui <- dashboardPage(skin = "green",
                                      Select a gas to begin 'Methane(CH4)' is chosen by default, click dropdown to make choice"),
                               
                                   hr(),
-                                  collapsible = T,
-                                  prettySwitch("log10", "Log 10 transformation",
-                                               status = "success",
-                                               slim = T),
-                                  sliderTextInput("year_range_2", " Select Time Span",
-                                                  choices = sort(unique(ghg_data$year)),
-                                                  selected = c(1990, 2005),
-                                                  from_min = 1990,
-                                                  from_max = 2000,
-                                                  to_min = 2010,
-                                                  to_max = 2020),
-                                  width = 2),
+                                  pickerInput("region", " Countries: ",
+                                              choices = unique(ghg_data$region),
+                                              multiple = T,
+                                              selected = c("United States", "United Kingdom")),
+                                  pickerInput("gas_select", "Gases:",
+                                              choices = unique(ghg_data$gas),
+                                              multiple = T,
+                                              selected = c("CH4", "CO2")),
+                                  width = 3),
                                 box(
                                   title = "Regional Comparison of Gas Emission",
-                                  width = 4,
-                                  plotOutput("line_plot_2"),
+                                  width = 9,
+                                  plotOutput("comp_ridges"),
                                   collapsible = T),
                                 box()
                               ),
                               
                               fluidRow(
                                 box(
-                                  h3( "Emission of gases in relation to Population and Per Capital($) "),
-                                  pickerInput("gas2", "Select Gas",
-                                              choices = unique(ghg_data$gas),
-                                              options = list(style = "btn-warning")),
-                                  h4("Toggle to Select Yearly Emission or Cummulative Emission"),
-                                  prettySwitch("cumsum", "toggle emission",
-                                               status = "warning",
-                                               slim = T),
-                                  width = 4),
+                                 pickerInput("single_year_2", "Year: ",
+                                             choices = sort(unique(ghg_data$year))),
+                                 hr(),
+                                 pickerInput("region2", " Countries: ",
+                                             choices = unique(ghg_data$region),
+                                             multiple = T,
+                                             selected = c("United States", "United Kingdom")),
+                                 width = 3),
                                 
-                                box(plotOutput("animated_bar_plot"))
+                                box(plotlyOutput("comp_bar_plot"),
+                                    width = 9)
                                 )
+                                
                               ),
+                            
                             tabItem(
                               tabName = "scenario",
                               h2("Scenario Analysis")
                               ),
+                            
+                            
                             tabItem(
                               tabName = "predictive_analysis",
                               h2("Predictive Analysis")
@@ -349,34 +352,30 @@ server <- function(input, output) {
     ggplotly(emis_plot)
   })
   
-  output$line_plot_2 <- renderPlotly({
-    plot_object <- reactive({
-      ghg_data %>% 
-        filter(between(year, min(input$year_range_2), max(input$year_range_2))) %>% 
-        group_by(gas, year) %>% 
-        summarize(emission_value = sum(emission_value))
-      })
+  output$comp_ridges <- renderPlot({
+    ghg_data %>% 
+      filter(region %in% input$region & gas %in% input$gas_select) %>% 
+      ggplot(aes(y = fct_reorder(region, emission_value), x = emission_value, fill = gas)) +
+      geom_density_ridges(alpha = 0.5, bandwidth = 1000000) +
+      scale_fill_viridis_d() +
+      labs(col = "",
+           x = "Emission in GgCO2e",
+           y = "Region") +
+      theme_tinyhand()+
+      scale_x_comma()
     
-    if (input$log10 == FALSE) {
-      return(
-        ggplot(plot_object(), aes(year, emission_value)) +
-          geom_line(aes(col = gas)) +
-          theme_tinyhand() +
-          labs(x = "Year",
-               y = "Emission (GgCO2e)",
-               title = paste0("Emission Trend from ", min(input$year_range_2), " to ", max(input$year_range_2))) +
-          scale_y_comma()
-      )} else {
-          return(
-            ggplot(plot_object(), aes(year, emission_value)) +
-              geom_line(aes(col = gas)) +
-              theme_tinyhand() +
-              labs(x = "Year",
-                   y = "Emission (GgCO2e) - Log Transformed",
-                   title = paste0("Emission Trend from ", min(input$year_range_2), " to ", max(input$year_range_2))) +
-              scale_y_log10()
-          )}
-    
+  })
+  
+  output$comp_bar_plot <- renderPlotly({
+    ghg_data %>% 
+      filter(year == input$single_year_2 & region %in% input$region2) %>% 
+      ggplot(aes(gas, cummulative_emission, fill = region)) +
+      geom_bar(stat = "identity",
+               position = "fill") +
+      scale_fill_viridis_d()+
+      labs(title = paste0("Emission Proportion in Year", input$single_year_2),
+           x = "Greenhouse Gases",
+           y = "Proportion of Emission")
   })
   
   

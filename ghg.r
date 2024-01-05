@@ -129,9 +129,23 @@ ghg_data <- ghg_data %>%
 
 ghg_data <- ghg_data %>% 
   group_by(gas, region) %>% 
-  mutate(cummulative_emission = cumsum(emission_value)) %>% 
+  mutate(cummulative_emission = cumsum(emission_value),
+         year = as.integer(year)) %>% 
+  ungroup()
   
+ghg_data %>% 
+  ggplot(aes(y = fct_reorder(region, emission_value), x = emission_value, fill = gas)) +
+  ggridges::geom_density_ridges(alpha = 0.6, bandwidth = 1000000) +
+  scale_fill_viridis_d()+
+  scale_color_viridis_d()+
+  theme_tinyhand() # template for comp plot
 
+ghg_data %>% 
+  filter(gas %in% c("CO2", "CH4", "GHG") & year %in% c(2010:2015)) %>% 
+  ggplot(aes(x = fct_reorder(factor(year), emission_value), y = emission_value, fill = gas))+
+  geom_violin() +
+  scale_fill_viridis_d()+
+  scale_y_log10()
 
 ghg_data %>% 
   group_by(region, year) %>% 
