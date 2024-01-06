@@ -145,7 +145,43 @@ ghg_data %>%
   ggplot(aes(x = fct_reorder(factor(year), emission_value), y = emission_value, fill = gas))+
   geom_violin() +
   scale_fill_viridis_d()+
-  scale_y_log10()
+  scale_y_log10() # template2 for two
+
+
+########
+library(maps)
+world <- map_data("world")
+
+world.cities %>%
+  filter(country.etc %in% unique(ghg_data$region))
+
+region_map <- world %>% 
+  filter(region %in% unique(ghg_data$region))
+
+ghg_map <- ghg_data %>% 
+  pivot_wider(names_from = c(gas),
+              values_from = emission_value) %>% 
+  right_join(world %>% filter(region %in% unique(ghg_data$region)), by = "region",
+             relationship = "many-to-many") %>% 
+  select(region:lat)
+
+ggplot() +
+  geom_polygon(data = region_map, aes(long, lat, group = group), fill = "grey") +
+  theme_void() +
+  geom_point(data = ghg_map,
+             aes(x = long, y = lat, size = GHG))
+
+leaflet::leaflet(ghg_map) %>% 
+  leaflet::addTiles() %>% 
+  addProviderTiles("Esri.WorldImagery") %>% 
+  leaflet::addCircleMarkers(~long,~lat)
+
+
+# theme_void()
+
+names(map_dat)
+
+###########
 
 ghg_data %>% 
   group_by(region, year) %>% 

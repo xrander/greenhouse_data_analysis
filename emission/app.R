@@ -373,7 +373,7 @@ server <- function(input, output) {
       geom_bar(stat = "identity",
                position = "fill") +
       scale_fill_viridis_d()+
-      labs(title = paste0("Emission Proportion in Year", input$single_year_2),
+      labs(title = paste0("Proportion of Emissions in Year", input$single_year_2, sep = " "),
            x = "Greenhouse Gases",
            y = "Proportion of Emission")
   })
