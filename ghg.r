@@ -7,9 +7,14 @@ library("scales")
 library("httr")
 library("jsonlite")
 
-base_url <- "https://data.un.org/ws/rest/data/UNSD,DF_UNData_UNFCC,1.0/.EN_ATM_METH_XLULUCF+EN_ATM_CO2E_XLULUCF+EN_CLC_GHGE_XLULUCF+EN_ATM_HFCE+EN_ATM_NO2E_XLULUCF+EN_ATM_PFCE+EN_ATM_SF6E.AUS+AUT+BLR+BEL+BGR+CAN+HRV+CYP+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ITA+JPN+LVA+LIE+LTU+LUX+MLT+MCO+NLD+NZL+NOR+POL+PRT+ROU+RUS+SVK+SVN+ESP+SWE+CHE+TUR+UKR+GBR+USA+EU1./ALL/?detail=full&dimensionAtObservation=TIME_PERIOD"
+base_url <- paste("https://data.un.org/ws/rest/data/UNSD,DF_UNData_UNFCC,1.0/.EN_ATM_METH_XLULUCF+",
+                  "EN_ATM_CO2E_XLULUCF+EN_CLC_GHGE_XLULUCF+EN_ATM_HFCE+",
+                  "EN_ATM_NO2E_XLULUCF+EN_ATM_PFCE+EN_ATM_SF6E.AUS+AUT+BLR+BEL+BGR+CAN+HRV+",
+                  "CYP+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ITA+JPN+LVA+",
+                  "LIE+LTU+LUX+MLT+MCO+NLD+NZL+NOR+POL+PRT+ROU+RUS+SVK+SVN+ESP+SWE+CHE+TUR+UKR+GBR+USA+EU1./",
+                  "ALL/?detail=full&dimensionAtObservation=TIME_PERIOD",
+                  sep = "")
 # Connecting to API to support auto updates
-
 res <- GET(base_url,
            add_headers(""),
            accept("text/csv"))
@@ -37,6 +42,10 @@ ghg_data <- ghg_data %>%
   mutate_if(is_character, factor)
 
 
+ghg_data <- ghg_data %>% 
+  mutate(region = case_when(region == "United States" ~ "United States of America",
+                             region != "United States" ~ region))
+
 format_large_number <- function(x) {
   if(x >= 1e12) {
     return(paste(format(round(x/1e12), nsmall = 1), " Trillion"))
@@ -50,6 +59,7 @@ format_large_number <- function(x) {
     return(as.character(x))
   }
 } # output needed to be in readable format and not long numbers
+
 
 # Metrics needed for bubble chart
 un_population <- read_csv("https://raw.githubusercontent.com/xrander/greenhouse_data_analysis/master/data/population_data.csv",
@@ -71,7 +81,9 @@ un_population <- un_population %>%
   rename("region" = "Country or Area",
          "year" = "Year",
          "population" = "Value") %>% 
-  mutate(year = as.integer(year))
+  mutate(year = as.integer(year),
+         region = case_when(region == "United Kingdom of Great Britain and Northern Ireland" ~ "United Kingdom",
+                            region != "United Kingdom of Great Britain and Northern Ireland" ~ region ))
 
 
 european_countries <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", 
@@ -90,13 +102,14 @@ eu_pop <- un_population %>%
   relocate(region)
 
 un_population <- un_population %>% 
-  bind_rows(eu_pop) %>% 
-  mutate(region = ifelse(region == "United Kingdom of Great Britain and Northern Ireland",
-                         "United Kingdom", region))
+  bind_rows(eu_pop)
 
 # The same will be repeated for the GDP Per Capital
 
-un_per_capital <-read_csv("https://raw.githubusercontent.com/xrander/greenhouse_data_analysis/master/data/gdp.csv")
+un_per_capital <-read_csv("https://raw.githubusercontent.com/xrander/greenhouse_data_analysis/master/data/gdp.csv") %>% 
+  mutate(region = case_when(region == "United States" ~ "United States of America",
+                            region == "United Kingdom of Great Britain and Northern Ireland" ~ "United Kingdom",
+                            region != "United States" ~ region))
 
 eu_per_capital <- un_per_capital %>% 
   filter(region %in% european_countries) %>% 
@@ -106,15 +119,22 @@ eu_per_capital <- un_per_capital %>%
   rename("region" = is_eu) %>% 
   relocate(region)
 
+
 un_per_capital <- un_per_capital %>% 
-  rename("per_capital" = gdp) %>% 
-  bind_rows(eu_per_capital) %>% 
-  mutate(region = case_when(region == "United States" ~ "United States of America",
-                            region == "United Kingdom of Great Britain and Northern Ireland" ~ "United Kingdom",
-                            region != "United States" ~ region))
+  rename("per_capital" = "gdp") %>% 
+  bind_rows(eu_per_capital)
 
 un_data <- un_population %>% 
   left_join(un_per_capital, join_by(region, year))
+
+# Count missing data
+un_data %>% 
+  filter(is.na(per_capital)) %>% 
+  count(region) %>% 
+  filter(region %in% ghg_data$region) %>% 
+  ggplot(aes(fct_reorder(region, n), n))+
+  geom_col()+
+  coord_flip()
 
 un_data <- un_data %>% 
   group_by(region, year) %>% 
@@ -123,9 +143,16 @@ un_data <- un_data %>%
 
 un_data <- un_data[complete.cases(un_data), ]
 
+
 ghg_data <- ghg_data %>% 
   left_join(un_data, join_by(region, year))
 
+ghg_data %>% 
+  filter(is.na(population) & is.na(per_capital)) %>% 
+  count(region) %>% 
+  ggplot(aes(region, n, fill = region))+
+  geom_col()+
+  coord_flip()
 
 ghg_data <- ghg_data %>% 
   group_by(gas, region) %>% 
@@ -138,50 +165,79 @@ ghg_data %>%
   ggridges::geom_density_ridges(alpha = 0.6, bandwidth = 1000000) +
   scale_fill_viridis_d()+
   scale_color_viridis_d()+
-  theme_tinyhand() # template for comp plot
+  theme_tinyhand() # template for comp tab
 
 ghg_data %>% 
   filter(gas %in% c("CO2", "CH4", "GHG") & year %in% c(2010:2015)) %>% 
   ggplot(aes(x = fct_reorder(factor(year), emission_value), y = emission_value, fill = gas))+
   geom_violin() +
   scale_fill_viridis_d()+
-  scale_y_log10() # template2 for two
+  scale_y_log10() # template two for comp tab
 
 
-########
-library(maps)
-world <- map_data("world")
+##########################################################
+# Map creation for tab 2 : comparison plot
+# Bins needed for fill aesthetic to create chloropeth
 
-world.cities %>%
-  filter(country.etc %in% unique(ghg_data$region))
+# Uncomment code below to see the varying max value for each gas
 
-region_map <- world %>% 
-  filter(region %in% unique(ghg_data$region))
+# ghg_data %>% 
+#   group_by(gas) %>% 
+#   summarize(max_emission = max(emission_value),
+#             min_emission = min(emission_value))
+
+
+# Bins for larger value group like CO2 and GHG
+my_bin <- function(x) {
+  cut(x,
+      breaks =c(0, 1000000, 2500000, 3500000, 5000000, 10000000),
+      labels = c("0 - 1,000,000",
+                 "1,000,000 - 2,500,000",
+                 "2,500,000 - 3,500,000",
+                 "3,500,000 - 5,000,000",
+                 "5,000,000 - 10,000,000"))
+}
+
+# Bins for med value group
+small_bin <- function(x) {
+  cut(x,
+      breaks = c(0, 50000, 100000, 250000, 500000, 1000000),
+      labels = c("0 - 50000",
+                 "50000 - 100000",
+                 "100000 - 250000",
+                 "250000 - 500000",
+                 "500000 - 1000000"))
+}
+
+# Bins for tiny value group
+tiny_bin <- function(x) {
+  cut(x,
+      breaks = c(0, 5000, 10000, 25000, 50000, 250000),
+      labels = c("0 - 5000",
+                 "5000 - 10000",
+                 "10000 - 25000",
+                 "25000 - 50000",
+                 "50000 - 250000"))
+}
 
 ghg_map <- ghg_data %>% 
-  pivot_wider(names_from = c(gas),
+  select(region:per_capital) %>%
+  mutate(emission_bin = cut(emission_value,
+                            breaks =c(0, 1000000, 2500000, 3500000, 5000000, 10000000),
+                            labels = c("0 - 1,000,000",
+                                       "1,000,000 - 2,500,000",
+                                       "2,500,000 - 3,500,000",
+                                       "3,500,000 - 5,000,000",
+                                       "5,000,000 - 10,000,000"))) %>% 
+  group_by(gas, emission_bin) %>% 
+  summarize(n())
+  pivot_wider(names_from = gas,
               values_from = emission_value) %>% 
-  right_join(world %>% filter(region %in% unique(ghg_data$region)), by = "region",
-             relationship = "many-to-many") %>% 
-  select(region:lat)
-
-ggplot() +
-  geom_polygon(data = region_map, aes(long, lat, group = group), fill = "grey") +
-  theme_void() +
-  geom_point(data = ghg_map,
-             aes(x = long, y = lat, size = GHG))
-
-leaflet::leaflet(ghg_map) %>% 
-  leaflet::addTiles() %>% 
-  addProviderTiles("Esri.WorldImagery") %>% 
-  leaflet::addCircleMarkers(~long,~lat)
+  mutate(region = case_when(region == "Czechia" ~ "Czech Republic",
+                            region != "Czechia" ~ region))
 
 
-# theme_void()
-
-names(map_dat)
-
-###########
+#####################################################################
 
 ghg_data %>% 
   group_by(region, year) %>% 
