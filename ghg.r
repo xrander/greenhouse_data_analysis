@@ -1,4 +1,7 @@
-# Load libraries
+
+# Load Libraries ----------------------------------------------------------
+
+
 library("tidyverse")
 library("plotly")
 library("hrbrthemes")
@@ -7,6 +10,9 @@ library("janitor")
 library("scales")
 library("httr")
 library("jsonlite")
+
+
+# Import Data -------------------------------------------------------------
 
 
 base_url <- paste0("https://data.un.org/ws/rest/data/UNSD,DF_UNData_UNFCC,1.0/",
@@ -27,6 +33,9 @@ content <- content(res, type = "text", encoding = "utf-8")
 
 ghg_data <- read_csv(content, col_types = cols()) |> 
   clean_names()
+
+# Clean Data --------------------------------------------------------------
+
 
 gas_formula <- tibble(
   indicator = unique(ghg_data$indicator),
@@ -65,13 +74,49 @@ ghg_data_countries |>
 
 greenhouse_gas <- ghg_data_countries |> 
   mutate(region = case_when(is.na(region) ~ "European Union",
-                            .default = region)) |>
-  mutateif(is_character, factor)
+                            .default = region),
+         year = as.integer(year)) |>
+  mutate_if(is_character, factor)
+
+
+skimr::skim_without_charts(greenhouse_gas)
+
+
+# Analysis ----------------------------------------------------------------
+
+greenhouse_gas |> 
+  group_by(year) |> 
+  summarize(total = sum(emission_value)) |> 
+  ggplot(aes(year, total)) +
+  geom_line() +
+  geom_point()
+
+
+# Visualization -----------------------------------------------------------
+greenhouse_gas |> 
+  filter(gas == "CO2") |> 
+  ggplot(aes(year, emission_value, group = region)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = seq(1990, 2021, by = 1)) +
+  theme(axis.text.x = element_text(angle = 45))
 
 
 
+greenhouse_gas |> 
+  filter(year == 2010) |> 
+  ggplot(aes(emission_value)) +
+  geom_density(fill = "red3") +
+  scale_x_log10(labels = label_number()) +
+  facet_wrap(~gas, scales = "free") +
+  labs(x = "Emission (log 10)") +
+  theme_clean()
 
-skimr::skim_without_charts(ghg_data)
+
+
+<ggplot(greenhouse_gas, aes(gas, emission_value)) +
+  geom_col()
+
 
 ghg_data |> 
   group_by(region, gas) |> 
