@@ -1,4 +1,9 @@
-install.packages("pacman")
+if (!require("pacman", quietly = T)) {
+  install.packages("pacman")
+  library(pacman)
+} else(
+  library(pacman)
+)
 
-pacman::p_load(tidyverse, plotly, hrbrthemes, ggthemes, janitor,
+p_load(tidyverse, plotly, hrbrthemes, ggthemes, janitor,
                scales, httr, jsonlite)

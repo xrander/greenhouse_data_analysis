@@ -2,3 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+ghg_data_analysis.Rproj
+data/
+world_map/
