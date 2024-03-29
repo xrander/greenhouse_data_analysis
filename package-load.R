@@ -5,5 +5,6 @@ if (!require("pacman", quietly = T)) {
   library(pacman)
 )
 
-p_load(tidyverse, plotly, hrbrthemes, ggthemes, janitor,
-               scales, httr, jsonlite)
+p_load(tidyverse, plotly, hrbrthemes, ggthemes, rvest, janitor,
+       scales, httr, jsonlite, shiny, shinydashboard, shinydashboardPlus,
+       shinyWidgets, leaflet, tidymodels, modeltime, timetk, digest, bslib)

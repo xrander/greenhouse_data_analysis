@@ -1,0 +1,16 @@
+/* Shift the sidebar to the right */
+.skin-blue .main-sidebar, .skin-black .main-sidebar {
+  left: auto;
+  right: 0;
+}
+
+/* Adjust the content wrapper */
+.content-wrapper {
+  margin-right: 200px;
+  margin-left: 0;
+}
+
+/* Fix for ttoggle button */
+.skin-blue .main-header .navbar .sidebar-toggle, .skin-black .main-header .navbar .sidebar-toggle{
+  float: left;
+}
