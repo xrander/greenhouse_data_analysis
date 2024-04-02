@@ -181,9 +181,11 @@ ghg_data_merged <- ghg_data_merged |>
 ghg_data_merged <- ghg_data_merged |> 
   mutate(
     emission_per_capital = emission/per_capital,
-    emission_per_pop = emission/population,
-    change_in_emission = (emission - lag(emission))/emission * 100
-  )
+    emission_per_pop = emission/population
+  ) |> 
+  group_by(gas) |> 
+  mutate(change_in_emission = (emission - lag(emission))/lag(emission) * 100) |> 
+  ungroup()
 
 
 write_csv(ghg_data_merged, "data/data.csv")

@@ -2,13 +2,12 @@
 total_regions_monitored <- function(data) {
   length(unique(data$country))
 }
-library(leaflet.providers)
 
 # Total emissions ---------------------------------------------------------
 
-yearly_emission <- function(data, choice_year) {
+yearly_emission <- function(data, my_year) {
   data |> 
-    filter(year == choice_year) |> 
+    filter(year == my_year) |> 
     summarize(
       tot_sum = sum(emission)
     )
@@ -17,9 +16,11 @@ yearly_emission <- function(data, choice_year) {
 total_emission <- function(data) {
   data |> 
     summarize(
-      tot_emis = sum(emission)
+      tot_emis = round(sum(emission)/1000000, 1)
     )
 }
+
+
 
 
 # Top emitting Countries --------------------------------------------------
@@ -54,6 +55,59 @@ plot_top_emitter <- function(top_emission_data) {
     )
 }
 
-leaflet() |> 
-  addProviderTiles(provider = "NASAGIBS.ViirsEarthAtNight2012")
+total_emis_by_country <- function(data) {
+  data |> 
+    summarize(
+      .by = c(year, country),
+      emission_per_pop = mean(emission_per_pop)
+    )
+}
+
+
+plot_emis_per_person <- function(data, country_var) {
+  total_emis_by_country(data) |> 
+    filter(country == {{ country_var }}) |> 
+    ggplot(aes(year, emission_per_pop)) +
+    geom_col(width = .1, fill = "tomato") +
+    geom_point(
+      size = 4, col = "darkgreen", fill = "tomato3",
+      shape = "circle fill", stroke = 1.5
+    ) +
+    labs(x = "year", y = "Tons per person") +
+    scale_x_continuous(breaks = seq(1990, 2020, 4))
+}
+  
+
+plot_emis_per_person(emis_tbl, unique(emis_tbl$country)[4])
+
+
+
+  
+
+# emis_tbl |> 
+#   filter(year == 2020) |> 
+#   ggplot(aes(population, per_capital, size = emission, col = emission)) +
+#   geom_point() +
+#   labs(col = "Emission", size = "Emission") +
+#   #scale_x_log10() +
+#   #scale_y_log10() +
+#   scale_color_viridis_c(direction = 1)
+# 
+# 
+# emis_tbl |> 
+#   summarize(
+#     .by = c(gas, year),
+#     percent_change = mean(change_in_emission)
+#   ) |> 
+#   filter(year %in% c(1991, 1992)) |> 
+#   pivot_wider(
+#     names_from = gas,
+#     values_from = percent_change
+#   ) |> 
+#   filter(!is.na(CO2)) |> 
+#   print(n = 100)
+# 
+
+# leaflet() |> 
+#   addProviderTiles(provider = "NASAGIBS.ViirsEarthAtNight2012")
 
