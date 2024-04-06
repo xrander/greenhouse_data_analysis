@@ -1,16 +1,18 @@
 setwd("/home/xrander/Documents/Data Science/Personal Project/ghg_data_analysis/emis-app-v2")
 
 source("setup.r")
-source("helper.r")
+source("helper-1.r")
 
 ui <- page_navbar(
 
 ## Theme set ---------------------------------------------------------------
 
    theme = bs_theme(
-     bootswatch = "shiny",
+     bootswatch = "bootstrap",
      version = 5,
      success = "lightgreen",
+     danger = "orange",
+     "text-danger" = "darkred",
      #"table-color" = "#86C7ED",
      base_font = font_google("Lato")
    ),
@@ -19,15 +21,18 @@ ui <- page_navbar(
 
   title = "EMT Tracker",
 
+  
+
 # Navigation section -------------------------------------------------------
 
 ## Nav_1 --------------------------------------------------------------------
   nav_panel(
     title = "Overview",
     icon = bs_icon("speedometer2"),
-    
+  
     # Nav bar content
     layout_columns(
+      
       value_box(
         title = "Regions Tracked",
         value = total_regions_monitored(emis_tbl),
@@ -39,59 +44,52 @@ ui <- page_navbar(
         theme = "success",
         max_height = "140px"
       ),
+      
+      uiOutput("year_emission_vb"),
+      
       value_box(
-        title = "Emission",
-        textOutput("year_emission"),
-        #showcase =,
-        #theme = ,
+        title = "Emissions to date",
+        value = paste0(total_emission(emis_tbl), "Billion ", "GGCO2e"),
+        showcase = bs_icon("clouds"),
+        theme = "danger",
         max_height = "140px"
       ),
-      value_box(
-        title = "Total Emission",
-        value = paste0(total_emission(emis_tbl), "M ", "GGCO2e"),
-        showcase = bs_icon("clouds-fill"),
-        #theme = ,
-        max_height = "140px"
-      ),
-      pickerInput(
+      uiOutput("percent_year_vb"),
+      
+      noUiSliderInput(
         inputId = "specific_year",
-        label = "Select Year",
-        choices = unique(emis_tbl$year),
-        selected = unique(emis_tbl$year)[7],
-        options = list(style = "btn-success")
+        label = "Year",
+        min = min(as.integer(emis_tbl$year)),
+        max = max(as.integer(emis_tbl$year)),
+        step = 1,
+        value = 2021,
+        orientation = "vertical",
+        width = "30px",
+        tooltips = TRUE,
+        height = "100px",
+        direction = "rtl"
       ),
+      
       card(
-        title = "Trends of gases",
-        max_height = "350px",
-        value_box(
-          title = "Percentage change",
-          value = "hold",
-          theme = "bg-warning" ,
-          max_height = "100px"
-        ),
         card_body(
-          max_height = "250px",
-          p("hold")
+          max_height = "350px",
+          plotlyOutput("percent_change_country")
         )
       ),
+      plotOutput("top_emitter"),
+      plotOutput("least_emitter"),
       card(
-        title = "Top Emitting Region",
-        max_height = "350px",
-        card_body(
-          p("Emissions in the regions")
-        )
+        plotlyOutput("plot_gas_prop"),
+        theme = "secondary",
+        max_height = "400px"
       ),
-      card(
-        title = "Greenhouse Gas Proportion Monitor",
-        min_height = "300px",
-        max_height = "350px"
-      ),
-      card(), # For map
-      col_widths = c(3, 3, 3, 3, # first row
+      card(), 
+      col_widths = c(3, 3, 3, 2, 1, # first row
                      4, 4, 4, # second row
-                     12),
+                     4, 8),
       row_heights = c(3, 5.5, 8)
-    )
+    ),
+
   ),
 
 ## Nav_2--------------------------------
@@ -134,9 +132,6 @@ ui <- page_navbar(
           icon = bs_icon("alarm")
         ),
         
-        ## Space --------------------------------
-        nav_spacer(),
-        
         ## Subtab-2 ----------------------------------
         nav_panel(
           title = "Scenario Analysis",
@@ -148,9 +143,76 @@ ui <- page_navbar(
 
 )
 server <- function(input, output, session) {
-  output$year_emission <- renderText({
-    ## Fix this
+  
+  top_region <- reactive({
+    top_5_region_emission(emis_tbl, input$specific_year)
+  })
+  
+  least_region <- reactive({
+    least_5_emitter(emis_tbl, input$specific_year)
+  })
+  
+  yearly_emis <- reactive({
     yearly_emission(emis_tbl, input$specific_year)
+  })
+  
+  percent_year <- reactive({
+     percent_change_year(emis_tbl, input$specific_year) |> 
+      pull(percent_change)
+  })
+  
+  percent_country <- reactive({
+    percent_change_country(emis_tbl, input$specific_year)
+  })
+  
+  percent_status <- reactive({
+    percent_change_year(emis_tbl, input$specific_year) |> 
+      pull(status)
+  })
+  
+  year_gas_prop <- reactive({
+    gas_prop(emis_tbl, input$specific_year)
+  })
+  
+  output$year_emission_vb <- renderUI({
+    value_box(
+      title = paste0("Year ",  input$specific_year, " Total Emission"),
+      value = yearly_emis(),
+      showcase = bs_icon("wind"),
+      theme = "danger",
+      max_height = "140px"
+    )
+  })
+  
+  
+  output$percent_year_vb <- renderUI({
+    value_box(
+      title = "Percentage change",
+      value = paste0(percent_year(), "%"),
+      theme = "success",
+      showcase = if(percent_status() == "bad") {
+        bs_icon("arrow-up-circle-fill", class = "text-danger")
+      } else
+        bs_icon("arrow-down-circle-fill", class = "text-success"),
+      showcase_layout = "top right",
+      max_height = "140px"
+    )
+  })
+  
+  output$percent_change_country <- renderPlotly({
+    plot_yearly_change(percent_country())
+  })
+  
+  output$top_emitter <- renderPlot({
+    plot_top_emitter(top_region())
+  })
+  
+  output$least_emitter <- renderPlot({
+    plot_least_emitter(least_region())
+  })
+  
+  output$plot_gas_prop <- renderPlotly({
+    plot_gas_prop(year_gas_prop())
   })
 }
 
