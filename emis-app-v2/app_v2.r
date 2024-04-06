@@ -48,8 +48,8 @@ ui <- page_navbar(
       uiOutput("year_emission_vb"),
       
       value_box(
-        title = "Emissions to date",
-        value = paste0(total_emission(emis_tbl), "Billion ", "GGCO2e"),
+        title = "Emission to date",
+        value = paste0(total_emission(emis_tbl), " Billion ", "GGCO2e"),
         showcase = bs_icon("clouds"),
         theme = "danger",
         max_height = "140px"
@@ -101,21 +101,59 @@ ui <- page_navbar(
     layout_columns(
       card(
         title = "Emission Per Person",
-        max_height = "220px"
+        min_height = "300px"
       ),
-      value_box(
-        title = "vs-emission",
-        value = "hold",
-        theme = "bg-warning",
-        max_height = "120px"
+      card(
+        value_box(
+          title = "vs-emission",
+          value = "hold",
+          theme = "bg-warning",
+          max_height = "140px"
+        ),
+        hr()
       ),
       card(
         title = "Radar Chart",
-        max_height = "220px"
+        min_height = "300px"
+      ),
+      card(
+        min_height = "300px",
+        pickerInput(
+          inputId = "country_1",
+          label = "Select Country 1",
+          choices = unique(emis_tbl$country),
+          selected = unique(emis_tbl$country)[1],
+          options = list(
+            style = "btn-dark"
+          )
+        ),
+        pickerInput(
+          inputId = "country_2",
+          label = "Select Country 2",
+          choices = unique(emis_tbl$country),
+          selected = unique(emis_tbl$country)[4],
+          option = list(
+            style = "btn-dark"
+          )
+        ),
+        pickerInput(
+          inputId = "country_3",
+          label = "Select Country 3",
+          choices = unique(emis_tbl$country),
+          selected = unique(emis_tbl$country)[15],
+          option = list(
+            style = "btn-dark"
+          )
+        ),
+        hr(),
+        card_body(
+          
+        )
       ),
       card(),
       card(),
-      col_widths = c(5, 2, 5, 8, 4)
+      col_widths = c(4, 2, 4, 2, 4, 8),
+      row_heights = c(5,7)
     )
   ),
 
@@ -188,12 +226,12 @@ server <- function(input, output, session) {
   output$percent_year_vb <- renderUI({
     value_box(
       title = "Percentage change",
-      value = paste0(percent_year(), "%"),
+      value = paste0(abs(percent_year()), "%"),
       theme = "success",
       showcase = if(percent_status() == "bad") {
         bs_icon("arrow-up-circle-fill", class = "text-danger")
       } else
-        bs_icon("arrow-down-circle-fill", class = "text-success"),
+        bs_icon("arrow-down-circle-fill", class = "text-light"),
       showcase_layout = "top right",
       max_height = "140px"
     )

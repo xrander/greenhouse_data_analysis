@@ -12,7 +12,7 @@ yearly_emission <- function(data, my_year) {
     summarize(
       tot_sum = round(sum(emission), 2)
     ) |> 
-    mutate(tot_sum = paste0(ceiling(tot_sum/1000000), "M GGCO2e"))
+    mutate(tot_sum = paste0(ceiling(tot_sum/1000000), " Million GGCO2e"))
 }
 
 

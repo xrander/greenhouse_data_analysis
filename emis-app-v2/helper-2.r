@@ -9,6 +9,18 @@ total_emis_by_country <- function(data, country_var) {
     filter(country %in% {{country_var}})
 }
 
+current_pop <- function(data, country_var) {
+  data |> 
+    filter(country %in% {{country_var}}) |> 
+    select(country, year, population) |> 
+    group_by(country) |> 
+    slice_max(year, n = 1) |> 
+    ungroup() |> 
+    distinct_all()
+}
+
+
+sel_count <- current_pop(emis_tbl, c("United States of America", "Russia", "United Kingdom"))
 
 plot_emis_per_person <- function(data) {
   data |> 
@@ -23,8 +35,6 @@ plot_emis_per_person <- function(data) {
 }
 
 
-plot_emis_per_person(emis_tbl, c(unique(emis_tbl$country)[4:5]))
-
 total_emis_by_country(emis_tbl, c("United States of America", "Russia", "United Kingdom")) |> 
   ggplot(aes(year, emission_per_pop, fill = country, col = country)) +
   geom_col(
@@ -37,6 +47,7 @@ total_emis_by_country(emis_tbl, c("United States of America", "Russia", "United 
   ) +
   scale_fill_tableau() +
   scale_color_tableau() +
-  geom_label(
-    aes(x = 2010, y = .01, label = list(unique(country)), col = "black")
+  geom_label(data = sel_count, aes(x = 2010, y = .01, label = population, col = "black")
   )
+
+
