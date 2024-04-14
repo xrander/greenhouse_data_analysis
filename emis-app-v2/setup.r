@@ -1,4 +1,5 @@
 source("data/dependencies.R")
+source("data/dat-processing.r")
 
 # Check for changes ---------------------------------------------------------------
 
@@ -31,4 +32,3 @@ emis_tbl <- read_csv("data/data.csv")
 # Read model --------------------------------------------------------------
 
 forecast_mod <- read_rds("data/forecast_mod.rds")
-

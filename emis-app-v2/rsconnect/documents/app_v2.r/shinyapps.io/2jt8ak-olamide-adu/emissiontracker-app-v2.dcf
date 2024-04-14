@@ -1,0 +1,12 @@
+name: emissiontracker-app-v2
+title: emissiontracker-app-v2
+username: 2jt8ak-olamide-adu
+account: 2jt8ak-olamide-adu
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 11751732
+bundleId: 8491432
+url: https://olamide-adu.shinyapps.io/emissiontracker-app-v2/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

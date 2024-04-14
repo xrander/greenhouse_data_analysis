@@ -12,7 +12,7 @@ yearly_emission <- function(data, my_year) {
     summarize(
       tot_sum = round(sum(emission), 2)
     ) |> 
-    mutate(tot_sum = paste0(ceiling(tot_sum/1000000), " Million GGCO2e"))
+    mutate(tot_sum = paste0(ceiling(tot_sum/1000000000), " Billion Tonne CO2e"))
 }
 
 
@@ -92,10 +92,6 @@ plot_yearly_change <- function(data) {
     color = ~status, type = "bar", showlegend = FALSE, colors = "YlOrRd"
   ) |> 
     layout(
-      title = list(
-        text = paste0("Percentage Change of Monitored Regions in Year ", unique(data$year)),
-        font = list(size = 18)
-      ),
       xaxis = list(title = "", tickangle = 320, tickfont = list(size = 10)),
       yaxis = list(title = "", tickformat = "1%")
     )
@@ -114,16 +110,16 @@ plot_top_emitter <- function(data) {
       fill = "white",
       col = muted("red")
     ) +
-    scale_x_continuous(
-      labels = label_comma(),
-      breaks = seq(min(data$tot_emission), max(data$tot_emission), 10000000)
-    )  +
-    theme_dark() +
-    theme(legend.position = "none") +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      axis.text.y = element_text(face = "bold", size = 10),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank()
+    ) +
     labs(
       x = "", y = "",
-      fill = "Total Emission",
-      title = paste0("Top Emitting Countries for year ", unique(data$year))
+      fill = "Total Emission"
     )
 }
 
@@ -141,20 +137,20 @@ plot_least_emitter <- function(data) {
       fill = "white",
       col = muted("springgreen")
     ) +
-    scale_x_continuous(
-      labels = label_comma(),
-      breaks = seq(min(data$tot_emission), max(data$tot_emission), 100000)
-    )  +
-    theme_dark() +
-    theme(legend.position = "none") +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      axis.text.y = element_text(face = "bold", size = 10),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank()
+    ) +
     labs(
       x = "", y = "",
-      fill = "Total Emission",
-      title = paste0("Least Emitting Countries for year ", unique(data$year))
+      fill = "Total Emission"
     )
 }
 
-## Row 3 ---------------------------------------------------------------------
+## 3 Row
 
 gas_prop <- function(data, filter_year) {
   data |> 
@@ -162,97 +158,94 @@ gas_prop <- function(data, filter_year) {
     summarize(
       .by = c(gas, year),
       total_emission = sum(emission)
-    )
+    ) |> 
+    arrange(desc(total_emission))
 }
+
 
 plot_gas_prop <- function(gas_prop_data) {
-  dt |> 
+  gas_prop_data |> 
     plot_ly(
-      labels = ~gas, values = ~ total_emission,
+      labels = ~ gas, values = ~ total_emission, direction = "clockwise",
       type = "pie", textposition = "inside", textinfo = "label+percent",
-      insidetextfont = list(color = "white", size = 15), hoverinfo = "text",
-      text = ~paste0(round(total_emission/1000000, 2), " Million GGCO2e"),
-      hole = .7, showlegend = FALSE
+      insidetextfont = list(color = I("white"), size = 15), hoverinfo = "text",
+      text = ~paste0(round(total_emission/1000000000, 2), " Billion Tonnes"),
+      showlegend = FALSE, legendrank = 10, automargin = TRUE, hole = .4
     ) |> 
-    layout(
-      title =  paste0("Proportion of Gas Emission for ", unique(gas_prop_data$year)),
-      font = list(size = 13),
-      paper_bgcolor = "transparent"
-    )
+    layout(hoverlabel=list(font=list(color = I("white"))))
 }
 
-#### Look for matches
-# emis_country <- emis_tbl |> 
-#   mutate(
-#     country = case_when(country == "United States of Americ" ~ "United States",
-#                         country == "Russia" ~ "Russian Federation",
-#                         country == "Turkiye" ~ "Turkey",
-#                         .default = country)
-#   )
-# 
-# world <- spData::world
-# 
-# world_ln_lt <- map_data("world")
-# 
-# 
-# european_countries <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czech Republic", "Denmark", 
-#                         "Estonia", "Finland", "France", "Germany", "Greece",
-#                         "Hungary", "Ireland", "Italy", "Latvia", "Lithuania",
-#                         "Luxembourg", "Malta", "Netherlands", "Poland", "Portugal", "Romania", "Slovakia", "Slovenia",
-#                         "Spain", "Sweden")
-# 
-# map_tbl <- world |>
-#    select(name_long, continent, area_km2) |>
-#    mutate(
-#      name_long = case_when(name_long %in% european_countries ~ "European Union",
-#                            .default = name_long)
-#    ) |>
-#  left_join(emis_country, join_by(name_long == country), relationship = "many-to-many")
-# 
-# 
-# map_tbl <- sf::st_drop_geometry(map_tbl)
-# 
-# 
-# 
-# 
-# 
-# map_tbl <- map_tbl |>
-#    summarize(
-#      .by = c(name_long, year, geom),
-#      emission = sum(emission),
-#      population = mean(population),
-#      per_capital = mean(per_capital),
-#      emission_per_capital = mean(emission_per_capital),
-#      emission_per_pop = mean(emission_per_pop)
-#    ) |> 
-#   rename(country = name_long)
-# 
-# 
-# maptbl2 <- sf::st_transform(map_tbl, 4326)
-# 
-# 
-# 
-# maptbl2 |> 
-#   filter(year == 2010) |> 
-#   leaflet() |> 
-#   addTiles() |>
-#   addPolygons(
-#     fillColor = ~ emission,
-#     stroke = NA,
-#     color = "#E84A5F"
-#   )
-# 
-# basemap <- list(
-#   scope = "world",
-#   showland = TRUE,
-#   landcolor = toRGB("#e5ecf6"),
-#   showcountries = TRUE,
-#   resolution = 140
-# )
-# 
-# plot_ly(type = "scattergeo", mode = "markers") |> 
-#   layout(geo = basemap)
-# 
-# 
-# library(mapproj)
-# map_data("world")
+
+
+# Row 3 -------------------------------------------------------
+## Map -------------------------------------------------------
+emis_country <- emis_tbl |>
+  mutate(
+    country = case_when(country == "United States of America" ~ "United States",
+                        country == "Turkiye" ~ "Turkey",
+                        .default = country)
+  ) |> 
+  summarize(
+    .by = c(country, year),
+    emission = sum(emission),
+    population = mean(population),
+    per_capital = mean(per_capital)
+  ) |> 
+  mutate(emission = round(emission/1e8)) |> 
+  select(name = country, year, emission)
+
+euro_union_countries <- c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czech Republic", "Denmark",
+                        "Estonia", "Finland", "France", "Germany", "Greece",
+                        "Hungary", "Ireland", "Italy", "Latvia", "Lithuania",
+                        "Luxembourg", "Malta", "Netherlands", "Poland", "Portugal",
+                        "Romania", "Slovakia", "Slovenia", "Spain", "Sweden")
+
+world_sf <- read_sf("data/world/TM_WORLD_BORDERS_SIMPL-0.3.shp") |> clean_names()
+
+world_sf <- world_sf |> 
+  select(name, lon, lat, area, geometry)
+
+world_sf <- world_sf |> 
+  mutate(
+    name = case_when(name %in% euro_union_countries ~ "European Union",
+                     .default = name)
+  )
+locations <- world_sf |> 
+  st_drop_geometry() |> 
+  select(name)
+
+locations <- locations |> left_join(emis_country, join_by(name), relationship = "many-to-many")
+
+incomplete_map_tbl <- locations |> select(name, year)
+
+complete_year_tbl <- incomplete_map_tbl |> 
+  complete(name, year = min(emis_country$year):max(emis_country$year)) |> 
+  filter(!is.na(year))
+
+
+complete_map_tbl <- complete_year_tbl |> 
+  left_join(locations, join_by(name), relationship = "many-to-many") |> 
+  select(name, year = year.x, emission) |> 
+  summarize(
+    .by = c(name, year),
+    emission = mean(emission)
+  )
+
+map_tbl <- world_sf |> 
+  full_join(complete_map_tbl, by = "name", relationship = "many-to-many")
+
+
+map_react <- function(input_year) {
+  map_tbl |> 
+    filter(year %in% {{ input_year }})
+}
+
+
+my_bins <- c(0, 50, 100, 150)
+
+color_palette <- colorBin(
+  palette = "YlOrBr",
+  domain = map_tbl$emission,
+  na.color = "transparent",
+  bins = my_bins
+)
